@@ -21,7 +21,7 @@ class DebateOrchestrator:
 
         self.turns: List[DebateTurn] = []
 
-    def run_debate((self)) -> DebateLog:
+    def run_debate(self) -> DebateLog:
         """
         Executes the full turn-based debate pipeline:
         1. Opening Statements
