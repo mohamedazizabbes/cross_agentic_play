@@ -4,6 +4,8 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional
 from datetime import datetime
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -136,8 +138,37 @@ class DebateLog:
         }
 
 
-# --- Structured claim parsing -------------------------------------------------
+# --- Judge output schema (used as Gemini response_schema) ----------------------
 
+
+class JudgeAxisScores(BaseModel):
+    A: float
+    B: float
+
+
+class JudgeScores(BaseModel):
+    logical_coherence: JudgeAxisScores
+    evidence_accuracy: JudgeAxisScores
+    responsiveness: JudgeAxisScores
+    persuasiveness: JudgeAxisScores
+
+
+class JudgeFallacy(BaseModel):
+    speaker: str
+    claim_id: str
+    fallacy_type: str
+    explanation: str
+
+
+class JudgeOutputSchema(BaseModel):
+    winner: str
+    scores: JudgeScores
+    reasoning: str
+    flagged_fallacies: list[JudgeFallacy]
+    unverified_or_contradicted_claims: list[str]
+
+
+# --- Structured claim parsing -------------------------------------------------
 CLAIMS_START = "[CLAIMS START]"
 CLAIMS_END = "[CLAIMS END]"
 

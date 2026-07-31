@@ -2,29 +2,24 @@ from models import Claim, DebateTurn
 from agents.fact_checker import FactChecker
 
 
-class FakeModel:
+class FakeClient:
     def __init__(self, responses):
-        self._responses = list(responses)
+        class Models:
+            def __init__(self, responses):
+                self._responses = list(responses)
 
-    def generate_content(self, prompt):
-        class Resp:
-            text = ""
-        Resp.text = self._responses.pop(0)
-        return Resp
+            def generate_content(self, model, contents, config=None):
+                class Resp:
+                    text = ""
+                Resp.text = self._responses.pop(0)
+                return Resp()
+
+        self.models = Models(responses)
 
 
 def make_checker(monkeypatch, responses):
-    class FakeGenModel:
-        def __init__(self, **kwargs):
-            self.responses = responses
-
-        def generate_content(self, prompt):
-            class Resp:
-                text = ""
-            Resp.text = responses.pop(0)
-            return Resp
-
-    monkeypatch.setattr("google.generativeai.GenerativeModel", FakeGenModel)
+    fake_client = FakeClient(responses)
+    monkeypatch.setattr("agents.fact_checker.get_client", lambda: fake_client)
     return FactChecker(model_name="fake-model")
 
 

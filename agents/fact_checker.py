@@ -1,10 +1,10 @@
 import logging
-import time
 from typing import List
-import google.generativeai as genai
+from google.genai import types
 from config import Config
 from models import DebateTurn, Claim
 from tools.web_search import web_search
+from utils.gemini import get_client, send_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +19,7 @@ FACTCHECK_SYSTEM_PROMPT = (
 class FactChecker:
     def __init__(self, model_name: str = None):
         self.model_name = model_name or Config.GEMINI_MODEL
-        genai.configure(api_key=Config.GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel(
-            model_name=self.model_name,
-            system_instruction=FACTCHECK_SYSTEM_PROMPT,
-        )
+        self.client = get_client()
 
     def verify_turns(self, turns: List[DebateTurn]) -> None:
         """Verifies every factual claim that carries a source, annotating the Claim in place."""
@@ -57,20 +53,13 @@ class FactChecker:
         claim.verification_note = f"{verdict}: {reason}"
 
     def _ask(self, prompt: str) -> str:
-        from google.api_core.exceptions import ResourceExhausted
-
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = self.model.generate_content(prompt)
-                if response and response.text:
-                    return response.text.strip()
-                return ""
-            except ResourceExhausted:
-                wait_sec = 15 * (attempt + 1)
-                logger.warning(f"Rate limit hit for FactChecker. Waiting {wait_sec}s before retry (attempt {attempt+1}/{max_retries})...")
-                time.sleep(wait_sec)
-            except Exception as e:
-                logger.warning(f"FactChecker call failed ({type(e).__name__}): {e}")
-                return "PARTIAL|Verification call failed; leaving claim unchecked."
-        return "PARTIAL|Verification call failed after retries; leaving claim unchecked."
+        config = types.GenerateContentConfig(system_instruction=FACTCHECK_SYSTEM_PROMPT)
+        response = send_with_retry(
+            lambda: self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            ),
+            label="FactChecker",
+        )
+        return response.text.strip() if response.text else ""

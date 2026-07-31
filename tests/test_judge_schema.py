@@ -1,8 +1,7 @@
 import json
 import pytest
-from google.generativeai import protos
-from models import JudgeVerdict, validate_judge_verdict
-from agents.judge import build_judge_response_schema, parse_judge_output
+from models import JudgeVerdict, validate_judge_verdict, JudgeOutputSchema
+from agents.judge import parse_judge_output
 
 VALID_JSON = {
     "winner": "PRO",
@@ -52,9 +51,13 @@ def test_parse_judge_output_returns_schema_valid_verdict():
     assert verdict.winner == "PRO"
 
 
-def test_judge_response_schema_declares_required_fields():
-    schema = build_judge_response_schema()
-    assert schema.type == protos.Type.OBJECT
+def test_judge_output_schema_declares_required_fields():
+    fields = set(JudgeOutputSchema.model_fields.keys())
     for field in ("winner", "scores", "reasoning", "flagged_fallacies", "unverified_or_contradicted_claims"):
-        assert field in schema.properties
-        assert field in schema.required
+        assert field in fields
+    assert set(JudgeOutputSchema.model_fields["scores"].annotation.__annotations__.keys()) == {
+        "logical_coherence",
+        "evidence_accuracy",
+        "responsiveness",
+        "persuasiveness",
+    }

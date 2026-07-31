@@ -1,24 +1,27 @@
 import logging
 import time
 from typing import Dict, Any, List
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# Function declaration for Gemini function calling API
-web_search_declaration = {
-    "name": "web_search",
-    "description": "Searches the web for empirical facts, statistics, historical dates, or verifiable data to back up arguments.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "query": {
-                "type": "STRING",
-                "description": "The search query string to look up facts or evidence."
-            }
+# Function declaration for Gemini function calling API (google-genai SDK)
+web_search_declaration = types.FunctionDeclaration(
+    name="web_search",
+    description="Searches the web for empirical facts, statistics, historical dates, or verifiable data to back up arguments.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "query": types.Schema(
+                type=types.Type.STRING,
+                description="The search query string to look up facts or evidence.",
+            ),
         },
-        "required": ["query"]
-    }
-}
+        required=["query"],
+    ),
+)
+
+web_search_tool = types.Tool(function_declarations=[web_search_declaration])
 
 
 def web_search(query: str, max_results: int = 4, max_retries: int = 2) -> str:
