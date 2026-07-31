@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
@@ -20,31 +21,53 @@ web_search_declaration = {
 }
 
 
-def web_search(query: str, max_results: int = 4) -> str:
+def web_search(query: str, max_results: int = 4, max_retries: int = 2) -> str:
     """
     Performs a web search using DuckDuckGo and returns a formatted snippet string.
-    Includes robust exception handling for network issues or rate limiting.
+
+    Robustness:
+    - Retries with exponential backoff (~1s, ~2s) on transient failures.
+    - Returns a structured JSON error result (rather than raising) once retries are exhausted,
+      so the calling model can fall back to reasoning without stalling the pipeline.
     """
     if not query or not query.strip():
-        return "Search error: Query cannot be empty."
+        return '{"error": "empty_query", "message": "Search query cannot be empty."}'
 
-    try:
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query.strip(), max_results=max_results))
-        
-        if not results:
-            return f"Search result for '{query}': No relevant web results found."
+    results: List[Dict[str, Any]] = []
+    last_error: Exception = None
 
-        formatted_snippets: List[str] = []
-        for i, res in enumerate(results, 1):
-            title = res.get("title", "No Title")
-            snippet = res.get("body", "No Snippet")
-            href = res.get("href", "")
-            formatted_snippets.append(f"[{i}] {title}\n    Snippet: {snippet}\n    Source: {href}")
+    for attempt in range(max_retries + 1):
+        try:
+            from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                results = list(ddgs.text(query.strip(), max_results=max_results))
+            break
+        except Exception as e:
+            last_error = e
+            if attempt >= max_retries:
+                break
+            wait_sec = 1 * (2 ** attempt)
+            logger.warning(
+                f"web_search attempt {attempt + 1}/{max_retries + 1} failed for query '{query}': {e}. "
+                f"Retrying in {wait_sec}s..."
+            )
+            time.sleep(wait_sec)
 
-        return f"Web Search Results for '{query}':\n\n" + "\n\n".join(formatted_snippets)
+    if last_error is not None and not results:
+        logger.warning(f"web_search exhausted retries for query '{query}': {last_error}")
+        return (
+            '{"error": "search_unavailable", "message": "Web search is temporarily unavailable. '
+            'Do NOT fabricate sources. Proceed using logical reasoning and mark factual claims without sources."}'
+        )
 
-    except Exception as e:
-        logger.warning(f"web_search failed for query '{query}': {e}")
-        return f"Search notice: Web search service temporarily unavailable ({type(e).__name__}). Proceed using logical reasoning and general knowledge, clearly identifying unsupported assumptions."
+    if not results:
+        return f"Web search results for '{query}': No relevant results found."
+
+    formatted_snippets: List[str] = []
+    for i, res in enumerate(results, 1):
+        title = res.get("title", "No Title")
+        snippet = res.get("body", "No Snippet")
+        href = res.get("href", "")
+        formatted_snippets.append(f"[{i}] {title}\n    Snippet: {snippet}\n    Source: {href}")
+
+    return f"Web Search Results for '{query}':\n\n" + "\n\n".join(formatted_snippets)
