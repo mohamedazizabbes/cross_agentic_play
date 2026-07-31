@@ -1,4 +1,3 @@
-from unittest.mock import MagicMock
 from models import DebateTurn, Claim, JudgeVerdict, AxisScore
 from orchestrator import DebateOrchestrator
 
@@ -36,3 +35,45 @@ def test_orchestrator_turn_sequence(monkeypatch):
     assert log.topic == "Test Topic"
     assert all(t.raw_text == "Mock content" for t in log.turns)
     assert all(len(t.claims) == 2 for t in log.turns)
+
+
+def test_rebuttal_prompt_includes_full_transcript(monkeypatch):
+    """Each rebuttal prompt must contain the full running transcript, not just the last turn."""
+    captured_prompts = []
+
+    def capturing_generate_turn(self, phase, prompt_text):
+        captured_prompts.append((phase, prompt_text))
+        return DebateTurn(
+            speaker=self.name,
+            role=self.stance,
+            phase=phase,
+            claims=[],
+            raw_text=f"Content for {phase}",
+        )
+
+    mock_verdict = JudgeVerdict(
+        reasoning="Mock reasoning",
+        fact_check_notes=[],
+        scores_pro=AxisScore(8.0, 8.0, 8.0, 8.0),
+        scores_con=AxisScore(7.0, 7.0, 7.0, 7.0),
+        winner="TIE",
+    )
+
+    monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", capturing_generate_turn)
+    monkeypatch.setattr("agents.judge.JudgeAgent.evaluate_debate", lambda self, topic, turns: mock_verdict)
+
+    orchestrator = DebateOrchestrator(topic="Test Topic", rebuttal_rounds=2)
+    orchestrator.run_debate()
+
+    rebuttal_prompts = [text for phase, text in captured_prompts if phase.startswith("REBUTTAL")]
+
+    for prompt in rebuttal_prompts:
+        # Full history must be present: all prior turns rendered as labeled transcript
+        assert "[Turn 1 |" in prompt
+        assert "Content for OPENING" in prompt
+        assert "respond directly to" in prompt.lower()
+        assert "claim ID" in prompt
+
+    # The second rebuttal round must see turns from the first rebuttal round too
+    final_prompt = rebuttal_prompts[-1]
+    assert "Content for REBUTTAL_1" in final_prompt
