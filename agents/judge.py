@@ -6,7 +6,6 @@ import google.generativeai as genai
 from google.generativeai import protos, types
 from config import Config
 from models import DebateTurn, JudgeVerdict, validate_judge_verdict, format_transcript
-from tools.web_search import web_search
 from agents.prompts import JUDGE_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ def build_judge_response_schema() -> protos.Schema:
     return protos.Schema(
         type=protos.Type.OBJECT,
         properties={
-            "winner": protos.Schema(type=protos.Type.STRING),
+            "winner": protos.Schema(type=protos.Type.STRING, enum=["PRO", "CON", "TIE"]),
             "scores": protos.Schema(
                 type=protos.Type.OBJECT,
                 properties={
@@ -114,8 +113,10 @@ class JudgeAgent:
         self.model = genai.GenerativeModel(
             model_name=self.model_name,
             system_instruction=JUDGE_SYSTEM_PROMPT,
-            tools=[web_search]
         )
+        # NOTE: the judge deliberately uses NO function-calling tools. Gemini's old SDK rejects
+        # response_schema (structured output) when tools are attached, and claim verification is
+        # already performed systematically by FactChecker before the judge runs.
         self.response_schema = build_judge_response_schema()
 
     def _structured_generation_config(self) -> types.GenerationConfig:
@@ -136,7 +137,8 @@ class JudgeAgent:
                 wait_sec = 15 * (attempt + 1)
                 logger.warning(f"Rate limit hit for Judge. Waiting {wait_sec}s before retry (attempt {attempt+1}/{max_retries})...")
                 time.sleep(wait_sec)
-        return None
+        # Final fallback attempt (mirrors DebaterAgent); propagates the error if it still fails.
+        return chat.send_message(prompt, generation_config=generation_config)
 
     def _parse_with_reask(self, chat, text: str, max_reasks: int = 2) -> Optional[JudgeVerdict]:
         """Validates judge output against the schema, re-asking the model up to max_reasks times."""

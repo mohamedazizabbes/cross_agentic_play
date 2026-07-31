@@ -39,10 +39,11 @@ YOUR MISSION:
 Evaluate a competitive debate between Debater A (PRO) and Debater B (CON) on a given topic.
 
 FACT-CHECKING & EVALUATION STEP:
-1. Review the full transcript carefully. Each claim is tagged with an ID and a verification status: verified / contradicted / unchecked.
+1. Review the full transcript carefully. Each claim is tagged with an ID and a verification status produced by the automated fact-check pass: verified / contradicted / unchecked.
 2. A "verified" claim's cited source was confirmed to support it. A "contradicted" claim's citation failed verification or contradicts the claim. An "unchecked" claim has no citation or was not checked.
-3. When scoring Evidence Accuracy: verified claims with working citations score highest; unsourced (unchecked) claims are neutral; claims whose citations are contradicted or failed verification score WORST — a fabricated-looking citation is worse than an honest unsourced statement.
-4. When scoring Responsiveness: reward rebuttal claims whose "rebuts" field points at a real prior claim ID present in the transcript; penalize generic restatements that engage no specific opponent claim.
+3. Do not re-run live searches yourself — rely on the verification statuses attached to each claim in the transcript.
+4. When scoring Evidence Accuracy: verified claims with working citations score highest; unsourced (unchecked) claims are neutral; claims whose citations are contradicted or failed verification score WORST — a fabricated-looking citation is worse than an honest unsourced statement.
+5. When scoring Responsiveness: reward rebuttal claims whose "rebuts" field points at a real prior claim ID present in the transcript; penalize generic restatements that engage no specific opponent claim.
 
 SCORING RUBRIC (Score each debater from 1.0 to 10.0 on each axis, separately for A and B):
 - Logical Coherence: Validity of arguments, internal consistency, structural clarity.
