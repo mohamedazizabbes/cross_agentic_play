@@ -8,30 +8,24 @@ Both debaters made valid points. Debater A provided stronger empirical evidence.
 
 ```json
 {
-  "fact_check_notes": ["Checked UBI statistic: verified."],
-  "scores_pro": {
-    "logical_coherence": 9.0,
-    "evidence_accuracy": 8.5,
-    "responsiveness": 8.0,
-    "persuasiveness": 9.0
+  "winner": "PRO",
+  "scores": {
+    "logical_coherence": {"A": 9.0, "B": 7.0},
+    "evidence_accuracy": {"A": 8.5, "B": 7.5},
+    "responsiveness": {"A": 8.0, "B": 7.0},
+    "persuasiveness": {"A": 9.0, "B": 7.5}
   },
-  "scores_con": {
-    "logical_coherence": 7.0,
-    "evidence_accuracy": 7.5,
-    "responsiveness": 7.0,
-    "persuasiveness": 7.5
-  },
-  "winner": "PRO"
+  "reasoning": "Debater A was more coherent and responsive.",
+  "flagged_fallacies": [],
+  "unverified_or_contradicted_claims": []
 }
 ```
 """
     verdict = parse_judge_output(raw_output)
     assert verdict.winner == "PRO"
-    assert verdict.scores_pro.logical_coherence == 9.0
-    assert verdict.scores_con.logical_coherence == 7.0
-    assert verdict.scores_pro.average() == 8.62
-    assert "Debater A provided stronger" in verdict.reasoning
-    assert len(verdict.fact_check_notes) == 1
+    assert verdict.scores["logical_coherence"] == {"A": 9.0, "B": 7.0}
+    assert verdict.scores["persuasiveness"] == {"A": 9.0, "B": 7.5}
+    assert verdict.reasoning == "Debater A was more coherent and responsive."
 
 
 def test_parse_judge_output_malformed_json_fallback():
@@ -39,5 +33,10 @@ def test_parse_judge_output_malformed_json_fallback():
     verdict = parse_judge_output(raw_output)
     assert isinstance(verdict, JudgeVerdict)
     assert verdict.winner == "TIE"
-    assert verdict.scores_pro.logical_coherence == 7.0
-    assert verdict.scores_con.logical_coherence == 7.0
+    assert set(verdict.scores.keys()) == {
+        "logical_coherence",
+        "evidence_accuracy",
+        "responsiveness",
+        "persuasiveness",
+    }
+    assert "The debate was close" in verdict.reasoning

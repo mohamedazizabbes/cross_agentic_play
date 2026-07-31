@@ -40,11 +40,17 @@ def main():
     print(" JUDGE VERDICT & SCORECARD")
     print("=" * 80)
     print(f"\nREASONING & FACT-CHECK ANALYSIS:\n{v.reasoning}")
-    if v.fact_check_notes:
-        print(f"\nFACT-CHECK NOTES: {v.fact_check_notes}")
-    
-    print(f"\nSCORES PRO: {v.scores_pro} (Avg: {v.scores_pro.average()})")
-    print(f"SCORES CON: {v.scores_con} (Avg: {v.scores_con.average()})")
+    if v.unverified_or_contradicted_claims:
+        print(f"\nUNVERIFIED/CONTRADICTED CLAIMS: {v.unverified_or_contradicted_claims}")
+    if v.flagged_fallacies:
+        print("\nFLAGGED FALLACIES:")
+        for f in v.flagged_fallacies:
+            print(f"  [{f['claim_id']}] {f['speaker']} - {f['fallacy_type']}: {f['explanation']}")
+
+    print("\nSCORES (1-10 per axis):")
+    for axis, per in v.scores.items():
+        print(f"  {axis:<22} A(PRO): {per['A']:<4}  B(CON): {per['B']}")
+
     print(f"\n>>> WINNER: {v.winner} <<<")
     print("=" * 80)
     print(f"\nStructured log saved to: {filepath}\n")

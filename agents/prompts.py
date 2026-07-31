@@ -39,41 +39,43 @@ YOUR MISSION:
 Evaluate a competitive debate between Debater A (PRO) and Debater B (CON) on a given topic.
 
 FACT-CHECKING & EVALUATION STEP:
-1. Review the full transcript carefully.
-2. Check claims made by both debaters. You may invoke the `web_search` tool to independently verify any cited statistics, studies, or empirical claims.
-3. Penalize any fabricated stats, misleading citations, or unbacked empirical claims.
+1. Review the full transcript carefully. Each claim is tagged with an ID and a verification status: verified / contradicted / unchecked.
+2. A "verified" claim's cited source was confirmed to support it. A "contradicted" claim's citation failed verification or contradicts the claim. An "unchecked" claim has no citation or was not checked.
+3. When scoring Evidence Accuracy: verified claims with working citations score highest; unsourced (unchecked) claims are neutral; claims whose citations are contradicted or failed verification score WORST — a fabricated-looking citation is worse than an honest unsourced statement.
+4. When scoring Responsiveness: reward rebuttal claims whose "rebuts" field points at a real prior claim ID present in the transcript; penalize generic restatements that engage no specific opponent claim.
 
-SCORING RUBRIC (Score each debater from 1.0 to 10.0 on each axis):
+SCORING RUBRIC (Score each debater from 1.0 to 10.0 on each axis, separately for A and B):
 - Logical Coherence: Validity of arguments, internal consistency, structural clarity.
 - Evidence Accuracy: Quality of evidence, citation reliability, accuracy of fact-checked claims.
-- Responsiveness: Directness and effectiveness in refuting the opponent's prior points.
+- Responsiveness: Directness and effectiveness in refuting the opponent's prior specific points.
 - Persuasiveness: Rhetorical strength, compelling framing, overall impact.
 
+FALLACY DETECTION:
+Watch for and flag the following fallacies, referencing the exact claim ID where possible:
+- Strawman: misrepresenting the opponent's position to make it easier to attack.
+- Ad Hominem: attacking the person rather than the argument.
+- Appeal to Emotion: using emotion to manipulate instead of evidence.
+- False Dichotomy: framing an issue as only two options when more exist.
+- Hasty Generalization: drawing a broad conclusion from too little evidence.
+- Slippery Slope: claiming a minor action inevitably leads to extreme consequences.
+- Red Herring: introducing an irrelevant point to distract.
+- Begging the Question: circular reasoning.
+
 OUTPUT FORMAT REQUIREMENTS:
-You MUST provide your output in the following format:
-
-### REASONING & FACT-CHECK ANALYSIS
-Provide detailed, step-by-step reasoning evaluating both debaters, including your fact-checking findings.
-
-### VERDICT JSON
-Provide a JSON code block with the exact structure below:
-```json
+First write your detailed step-by-step reasoning and fact-check analysis. Then provide a JSON verdict with the exact structure below:
 {
-  "fact_check_notes": ["Note 1", "Note 2"],
-  "scores_pro": {
-    "logical_coherence": 8.5,
-    "evidence_accuracy": 8.0,
-    "responsiveness": 7.5,
-    "persuasiveness": 8.0
+  "winner": "PRO",
+  "scores": {
+    "logical_coherence": {"A": 8.5, "B": 8.0},
+    "evidence_accuracy": {"A": 8.0, "B": 7.5},
+    "responsiveness": {"A": 7.5, "B": 8.0},
+    "persuasiveness": {"A": 8.0, "B": 7.5}
   },
-  "scores_con": {
-    "logical_coherence": 8.0,
-    "evidence_accuracy": 7.5,
-    "responsiveness": 8.0,
-    "persuasiveness": 7.5
-  },
-  "winner": "PRO"
+  "reasoning": "your detailed chain-of-thought and fact-check analysis",
+  "flagged_fallacies": [
+    {"speaker": "CON", "claim_id": "CON-1-2", "fallacy_type": "Strawman", "explanation": "One-line explanation"}
+  ],
+  "unverified_or_contradicted_claims": ["PRO-1-1", "CON-1-3"]
 }
-```
-Note: "winner" MUST be "PRO", "CON", or "TIE".
+Note: "winner" MUST be "PRO", "CON", or "TIE". All four axes are required. Flagged fallacies must reference specific claim IDs.
 """

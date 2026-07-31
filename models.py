@@ -38,24 +38,84 @@ class AxisScore:
         return round((self.logical_coherence + self.evidence_accuracy + self.responsiveness + self.persuasiveness) / 4.0, 2)
 
 
+VALID_AXES = ("logical_coherence", "evidence_accuracy", "responsiveness", "persuasiveness")
+VALID_WINNERS = ("PRO", "CON", "TIE")
+
+
 @dataclass
 class JudgeVerdict:
-    reasoning: str
-    fact_check_notes: List[str]
-    scores_pro: AxisScore
-    scores_con: AxisScore
-    winner: str               # "PRO", "CON", or "TIE"
+    winner: str                                  # "PRO", "CON", or "TIE"
+    scores: Dict[str, Dict[str, float]]          # axis -> {"A": float, "B": float}
+    reasoning: str                               # required CoT / fact-check analysis
+    flagged_fallacies: List[Dict[str, str]] = field(default_factory=list)  # {speaker, claim_id, fallacy_type, explanation}
+    unverified_or_contradicted_claims: List[str] = field(default_factory=list)  # claim IDs that failed fact-check
 
     def to_dict(self) -> dict:
         return {
-            "reasoning": self.reasoning,
-            "fact_check_notes": self.fact_check_notes,
-            "scores_pro": asdict(self.scores_pro),
-            "scores_con": asdict(self.scores_con),
-            "pro_avg": self.scores_pro.average(),
-            "con_avg": self.scores_con.average(),
             "winner": self.winner,
+            "scores": self.scores,
+            "reasoning": self.reasoning,
+            "flagged_fallacies": self.flagged_fallacies,
+            "unverified_or_contradicted_claims": self.unverified_or_contradicted_claims,
         }
+
+
+def validate_judge_verdict(data: dict) -> JudgeVerdict:
+    """Coerces and validates a raw judge JSON dict into a JudgeVerdict.
+
+    Raises ValueError if the structure violates the schema, so callers can re-ask
+    the model instead of silently force-parsing garbage.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("Judge output is not a JSON object.")
+
+    winner = str(data.get("winner", "")).upper()
+    if winner not in VALID_WINNERS:
+        raise ValueError(f"Invalid winner: {winner!r} (must be PRO, CON, or TIE).")
+
+    raw_scores = data.get("scores")
+    if not isinstance(raw_scores, dict):
+        raise ValueError("Missing 'scores' object.")
+
+    scores: Dict[str, Dict[str, float]] = {}
+    for axis in VALID_AXES:
+        per_speaker = raw_scores.get(axis)
+        if not isinstance(per_speaker, dict) or "A" not in per_speaker or "B" not in per_speaker:
+            raise ValueError(f"Missing scores for axis {axis!r} (need 'A' and 'B').")
+        try:
+            scores[axis] = {"A": float(per_speaker["A"]), "B": float(per_speaker["B"])}
+        except (TypeError, ValueError):
+            raise ValueError(f"Non-numeric score for axis {axis!r}.")
+
+    reasoning = str(data.get("reasoning", "")).strip()
+    if not reasoning:
+        raise ValueError("Missing 'reasoning' text.")
+
+    flagged = data.get("flagged_fallacies", [])
+    if not isinstance(flagged, list):
+        raise ValueError("'flagged_fallacies' must be a list.")
+    fallacies: List[Dict[str, str]] = []
+    for item in flagged:
+        if isinstance(item, dict):
+            fallacies.append({
+                "speaker": str(item.get("speaker", "")),
+                "claim_id": str(item.get("claim_id", "")),
+                "fallacy_type": str(item.get("fallacy_type", "")),
+                "explanation": str(item.get("explanation", "")),
+            })
+
+    unverified = data.get("unverified_or_contradicted_claims", [])
+    if not isinstance(unverified, list):
+        raise ValueError("'unverified_or_contradicted_claims' must be a list.")
+    unverified_claims = [str(c) for c in unverified]
+
+    return JudgeVerdict(
+        winner=winner,
+        scores=scores,
+        reasoning=reasoning,
+        flagged_fallacies=fallacies,
+        unverified_or_contradicted_claims=unverified_claims,
+    )
 
 
 @dataclass

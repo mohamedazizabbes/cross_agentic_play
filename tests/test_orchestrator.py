@@ -1,4 +1,4 @@
-from models import DebateTurn, Claim, JudgeVerdict, AxisScore
+from models import DebateTurn, Claim, JudgeVerdict
 from orchestrator import DebateOrchestrator
 
 
@@ -15,11 +15,16 @@ def test_orchestrator_turn_sequence(monkeypatch):
     )
 
     mock_verdict = JudgeVerdict(
+        winner="PRO",
+        scores={
+            "logical_coherence": {"A": 8.0, "B": 7.0},
+            "evidence_accuracy": {"A": 8.0, "B": 7.0},
+            "responsiveness": {"A": 8.0, "B": 7.0},
+            "persuasiveness": {"A": 8.0, "B": 7.0},
+        },
         reasoning="Mock reasoning",
-        fact_check_notes=[],
-        scores_pro=AxisScore(8.0, 8.0, 8.0, 8.0),
-        scores_con=AxisScore(7.0, 7.0, 7.0, 7.0),
-        winner="PRO"
+        flagged_fallacies=[],
+        unverified_or_contradicted_claims=[],
     )
 
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", lambda self, phase, prompt_text: mock_turn)
@@ -52,11 +57,16 @@ def test_rebuttal_prompt_includes_full_transcript(monkeypatch):
         )
 
     mock_verdict = JudgeVerdict(
-        reasoning="Mock reasoning",
-        fact_check_notes=[],
-        scores_pro=AxisScore(8.0, 8.0, 8.0, 8.0),
-        scores_con=AxisScore(7.0, 7.0, 7.0, 7.0),
         winner="TIE",
+        scores={
+            "logical_coherence": {"A": 7.0, "B": 7.0},
+            "evidence_accuracy": {"A": 7.0, "B": 7.0},
+            "responsiveness": {"A": 7.0, "B": 7.0},
+            "persuasiveness": {"A": 7.0, "B": 7.0},
+        },
+        reasoning="Mock reasoning",
+        flagged_fallacies=[],
+        unverified_or_contradicted_claims=[],
     )
 
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", capturing_generate_turn)

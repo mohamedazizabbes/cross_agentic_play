@@ -1,74 +1,108 @@
 import json
 import re
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Optional
 import google.generativeai as genai
+from google.generativeai import protos, types
 from config import Config
-from models import DebateTurn, JudgeVerdict, AxisScore
+from models import DebateTurn, JudgeVerdict, validate_judge_verdict, format_transcript
 from tools.web_search import web_search
 from agents.prompts import JUDGE_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
 
-def parse_judge_output(raw_output: str) -> JudgeVerdict:
-    """
-    Parses the judge LLM raw string response into structured CoT reasoning and JudgeVerdict.
-    Robust against markdown code fences, extra text, or minor JSON formatting quirks.
-    """
-    reasoning_text = raw_output
-    json_data = {}
+def build_judge_response_schema() -> protos.Schema:
+    """Protobuf schema that enforces the JudgeVerdict structure via Gemini response_schema."""
+    axis = protos.Schema(
+        type=protos.Type.OBJECT,
+        properties={
+            "A": protos.Schema(type=protos.Type.NUMBER),
+            "B": protos.Schema(type=protos.Type.NUMBER),
+        },
+        required=["A", "B"],
+    )
+    fallacy = protos.Schema(
+        type=protos.Type.OBJECT,
+        properties={
+            "speaker": protos.Schema(type=protos.Type.STRING),
+            "claim_id": protos.Schema(type=protos.Type.STRING),
+            "fallacy_type": protos.Schema(type=protos.Type.STRING),
+            "explanation": protos.Schema(type=protos.Type.STRING),
+        },
+        required=["speaker", "claim_id", "fallacy_type", "explanation"],
+    )
+    return protos.Schema(
+        type=protos.Type.OBJECT,
+        properties={
+            "winner": protos.Schema(type=protos.Type.STRING),
+            "scores": protos.Schema(
+                type=protos.Type.OBJECT,
+                properties={
+                    "logical_coherence": axis,
+                    "evidence_accuracy": axis,
+                    "responsiveness": axis,
+                    "persuasiveness": axis,
+                },
+                required=["logical_coherence", "evidence_accuracy", "responsiveness", "persuasiveness"],
+            ),
+            "reasoning": protos.Schema(type=protos.Type.STRING),
+            "flagged_fallacies": protos.Schema(type=protos.Type.ARRAY, items=fallacy),
+            "unverified_or_contradicted_claims": protos.Schema(
+                type=protos.Type.ARRAY,
+                items=protos.Schema(type=protos.Type.STRING),
+            ),
+        },
+        required=[
+            "winner",
+            "scores",
+            "reasoning",
+            "flagged_fallacies",
+            "unverified_or_contradicted_claims",
+        ],
+    )
 
-    # Extract JSON block using regex if wrapped in markdown ```json ... ```
-    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, re.DOTALL)
-    if json_match:
-        json_str = json_match.group(1)
-        reasoning_text = raw_output[:json_match.start()].strip()
-    else:
-        # Try finding raw JSON dict between { and }
+
+def _extract_json_dict(raw_output: str) -> dict:
+    """Extracts a JSON object from model output, tolerating markdown fences and surrounding prose."""
+    if not raw_output:
+        return {}
+    json_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", raw_output, re.DOTALL)
+    if not json_match:
         json_match = re.search(r"(\{[\s\S]*\"winner\"[\s\S]*\})", raw_output)
-        if json_match:
-            json_str = json_match.group(1)
-            reasoning_text = raw_output[:json_match.start()].strip()
-        else:
-            json_str = ""
+    if not json_match:
+        return {}
+    try:
+        return json.loads(json_match.group(1))
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse judge JSON block: {e}")
+        return {}
 
-    if json_str:
+
+def parse_judge_output(raw_output: str) -> JudgeVerdict:
+    """Fallback tolerant parser for judge output when structured generation is unavailable."""
+    data = _extract_json_dict(raw_output)
+    if data:
         try:
-            json_data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse judge JSON block: {e}")
+            return validate_judge_verdict(data)
+        except ValueError as e:
+            logger.warning(f"Judge JSON failed validation, falling back to defaults: {e}")
 
-    # Fallbacks for missing/malformed fields
-    fact_check_notes = json_data.get("fact_check_notes", [])
-    
-    pro_scores_dict = json_data.get("scores_pro", {})
-    con_scores_dict = json_data.get("scores_con", {})
-
-    scores_pro = AxisScore(
-        logical_coherence=float(pro_scores_dict.get("logical_coherence", 7.0)),
-        evidence_accuracy=float(pro_scores_dict.get("evidence_accuracy", 7.0)),
-        responsiveness=float(pro_scores_dict.get("responsiveness", 7.0)),
-        persuasiveness=float(pro_scores_dict.get("persuasiveness", 7.0)),
-    )
-
-    scores_con = AxisScore(
-        logical_coherence=float(con_scores_dict.get("logical_coherence", 7.0)),
-        evidence_accuracy=float(con_scores_dict.get("evidence_accuracy", 7.0)),
-        responsiveness=float(con_scores_dict.get("responsiveness", 7.0)),
-        persuasiveness=float(con_scores_dict.get("persuasiveness", 7.0)),
-    )
-
-    winner = json_data.get("winner", "TIE").upper()
-    if winner not in ["PRO", "CON", "TIE"]:
+    winner = str(data.get("winner", "TIE")).upper()
+    if winner not in ("PRO", "CON", "TIE"):
         winner = "TIE"
 
     return JudgeVerdict(
-        reasoning=reasoning_text or "No CoT reasoning text extracted.",
-        fact_check_notes=fact_check_notes,
-        scores_pro=scores_pro,
-        scores_con=scores_con,
-        winner=winner
+        winner=winner,
+        scores={
+            "logical_coherence": {"A": 0.0, "B": 0.0},
+            "evidence_accuracy": {"A": 0.0, "B": 0.0},
+            "responsiveness": {"A": 0.0, "B": 0.0},
+            "persuasiveness": {"A": 0.0, "B": 0.0},
+        },
+        reasoning=raw_output.strip() or "No CoT reasoning text extracted.",
+        flagged_fallacies=[],
+        unverified_or_contradicted_claims=[],
     )
 
 
@@ -76,54 +110,89 @@ class JudgeAgent:
     def __init__(self, model_name: str = None):
         self.model_name = model_name or Config.GEMINI_MODEL
         genai.configure(api_key=Config.GOOGLE_API_KEY)
-        
+
         self.model = genai.GenerativeModel(
             model_name=self.model_name,
             system_instruction=JUDGE_SYSTEM_PROMPT,
             tools=[web_search]
         )
+        self.response_schema = build_judge_response_schema()
 
-    def evaluate_debate(self, topic: str, turns: List[DebateTurn]) -> JudgeVerdict:
-        """
-        Evaluates the full debate transcript, fact-checks key points, and returns JudgeVerdict.
-        """
-        logger.info("Judge is evaluating debate transcript...")
-
-        # Format transcript for judge
-        transcript_lines = [f"DEBATE TOPIC: {topic}\n", "--- FULL TRANSCRIPT ---"]
-        for turn in turns:
-            transcript_lines.append(f"\n[{turn.speaker} - Phase: {turn.phase}]")
-            transcript_lines.append(turn.raw_text)
-            if turn.claims:
-                transcript_lines.append("(Claims: " + ", ".join(f"{c.claim_id}: {c.text}" for c in turn.claims) + ")")
-
-        full_transcript = "\n".join(transcript_lines)
-        
-        prompt = (
-            "Please evaluate the following debate transcript. Perform any necessary web_search "
-            "fact-checks on cited evidence, write your detailed Chain-of-Thought reasoning, "
-            "and output the JSON verdict scorecard.\n\n"
-            f"{full_transcript}"
+    def _structured_generation_config(self) -> types.GenerationConfig:
+        return types.GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=self.response_schema,
         )
 
+    def _send_with_retry(self, chat, prompt: str, generation_config=None):
         import time
         from google.api_core.exceptions import ResourceExhausted
 
-        chat = self.model.start_chat(enable_automatic_function_calling=True)
-        
         max_retries = 3
-        response = None
         for attempt in range(max_retries):
             try:
-                response = chat.send_message(prompt)
-                break
-            except ResourceExhausted as e:
+                return chat.send_message(prompt, generation_config=generation_config)
+            except ResourceExhausted:
                 wait_sec = 15 * (attempt + 1)
                 logger.warning(f"Rate limit hit for Judge. Waiting {wait_sec}s before retry (attempt {attempt+1}/{max_retries})...")
                 time.sleep(wait_sec)
-        
+        return None
+
+    def _parse_with_reask(self, chat, text: str, max_reasks: int = 2) -> Optional[JudgeVerdict]:
+        """Validates judge output against the schema, re-asking the model up to max_reasks times."""
+        data = _extract_json_dict(text)
+        for attempt in range(max_reasks + 1):
+            if not data:
+                return None
+            try:
+                return validate_judge_verdict(data)
+            except ValueError as e:
+                if attempt >= max_reasks:
+                    logger.error(f"Judge verdict failed schema validation after {max_reasks} re-asks: {e}")
+                    return None
+                logger.warning(f"Judge JSON invalid (attempt {attempt+1}): {e}. Re-asking...")
+                response = self._send_with_retry(
+                    chat,
+                    f"Your previous verdict JSON failed schema validation: {e}. "
+                    "Respond with ONLY a valid JSON verdict matching the required schema.",
+                    generation_config=self._structured_generation_config(),
+                )
+                if response is None or not response.text:
+                    return None
+                text = response.text
+                data = _extract_json_dict(text)
+        return None
+
+    def evaluate_debate(self, topic: str, turns: List[DebateTurn]) -> JudgeVerdict:
+        """
+        Evaluates the full debate transcript and returns a schema-validated JudgeVerdict.
+        Uses Gemini structured output (response_schema) with a retry-with-reask loop;
+        falls back to tolerant text parsing if structured mode is unavailable.
+        """
+        logger.info("Judge is evaluating debate transcript...")
+
+        full_transcript = format_transcript(turns)
+        prompt = (
+            "Please evaluate the following debate transcript. Review each claim's ID and "
+            "verification status, flag any fallacies, and return the JSON verdict scorecard.\n\n"
+            f"{full_transcript}"
+        )
+
+        chat = self.model.start_chat(enable_automatic_function_calling=True)
+
+        # Pass 1: structured output mode (schema-enforced)
+        try:
+            response = self._send_with_retry(chat, prompt, generation_config=self._structured_generation_config())
+            if response is not None and response.text:
+                verdict = self._parse_with_reask(chat, response.text)
+                if verdict is not None:
+                    return verdict
+        except Exception as e:
+            logger.warning(f"Structured judge output unavailable ({type(e).__name__}); falling back to text mode.")
+
+        # Fallback: plain text mode with tolerant parsing
+        logger.warning("Falling back to text-based judge parsing.")
+        response = self._send_with_retry(chat, prompt)
         if response is None:
-            response = chat.send_message(prompt)
-        
-        raw_text = response.text if response.text else ""
-        return parse_judge_output(raw_text)
+            raise RuntimeError("Judge failed to produce a verdict after retries.")
+        return parse_judge_output(response.text or "")
