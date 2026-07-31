@@ -29,7 +29,7 @@ pip install -r requirements.txt
 Create a `.env` file from `.env.example`:
 ```env
 GOOGLE_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ## Usage
