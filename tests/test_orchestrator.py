@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from models import DebateTurn, JudgeVerdict, AxisScore
+from models import DebateTurn, Claim, JudgeVerdict, AxisScore
 from orchestrator import DebateOrchestrator
 
 
@@ -8,8 +8,11 @@ def test_orchestrator_turn_sequence(monkeypatch):
         speaker="Mock Speaker",
         role="PRO",
         phase="MOCK",
-        content="Mock content",
-        tool_calls=[]
+        claims=[
+            Claim(text="Mock factual claim", is_factual=True, sources=["https://example.com"]),
+            Claim(text="Mock opinion claim", is_factual=False, sources=[]),
+        ],
+        raw_text="Mock content",
     )
 
     mock_verdict = JudgeVerdict(
@@ -31,3 +34,5 @@ def test_orchestrator_turn_sequence(monkeypatch):
     assert len(log.turns) == 6
     assert log.verdict.winner == "PRO"
     assert log.topic == "Test Topic"
+    assert all(t.raw_text == "Mock content" for t in log.turns)
+    assert all(len(t.claims) == 2 for t in log.turns)

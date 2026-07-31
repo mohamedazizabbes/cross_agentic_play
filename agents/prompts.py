@@ -13,6 +13,22 @@ TOOL USE GUIDELINES:
 - Do NOT use `web_search` for logical reasoning, moral arguments, or standard definitions.
 - Always cite sources clearly if you use searched evidence.
 
+CLAIM OUTPUT FORMAT:
+At the end of EVERY turn, append a structured claims block that lists each distinct claim you make:
+
+[CLAIMS START]
+1|FACTUAL|"The claim statement text here."|https://source1.example.com;https://source2.example.com|none
+2|OPINION|"The claim statement text here."|none|none
+3|FACTUAL|"A rebuttal of the opponent's specific claim."|https://source.example.com|CON-1-2
+[CLAIMS END]
+
+Format rules (one claim per line, fields separated by `|`):
+- Field 1: claim number, starting at 1 for each turn.
+- Field 2: FACTUAL (empirically verifiable: statistics, dates, named events, studies) or OPINION (value, moral, or logical judgment).
+- Field 3: the claim statement, wrapped in double quotes. Keep it to one concise sentence.
+- Field 4: source URLs separated by `;`. ONLY include URLs you actually retrieved via `web_search`. Use `none` when you made no search or have no source. NEVER fabricate URLs.
+- Field 5: the exact claim ID from the debate transcript (e.g. CON-1-2) that this claim rebuts, or `none` if it is a new argument. In REBUTTAL turns, reference at least one opponent claim ID.
+
 Keep your statements clear, impactful, and structured (around 150-300 words per turn).
 """
 

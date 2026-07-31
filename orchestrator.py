@@ -52,7 +52,7 @@ class DebateOrchestrator:
             logger.info(f"--- Phase: Rebuttal Round {r}/{self.rebuttal_rounds} ---")
             
             # Debater A rebuts Debater B's last turn
-            last_turn_b = self.turns[-1].content
+            last_turn_b = self.turns[-1].raw_text
             prompt_a_reb = (
                 f"Rebuttal Round {r}: Respond directly to Debater B's previous statement:\n"
                 f"\"{last_turn_b}\"\n\n"
@@ -62,7 +62,7 @@ class DebateOrchestrator:
             self.turns.append(turn_a_reb)
 
             # Debater B rebuts Debater A's last turn
-            last_turn_a = self.turns[-1].content
+            last_turn_a = self.turns[-1].raw_text
             prompt_b_reb = (
                 f"Rebuttal Round {r}: Respond directly to Debater A's previous statement:\n"
                 f"\"{last_turn_a}\"\n\n"

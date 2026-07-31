@@ -93,9 +93,9 @@ class JudgeAgent:
         transcript_lines = [f"DEBATE TOPIC: {topic}\n", "--- FULL TRANSCRIPT ---"]
         for turn in turns:
             transcript_lines.append(f"\n[{turn.speaker} - Phase: {turn.phase}]")
-            transcript_lines.append(turn.content)
-            if turn.tool_calls:
-                transcript_lines.append(f"(Searches performed: {turn.tool_calls})")
+            transcript_lines.append(turn.raw_text)
+            if turn.claims:
+                transcript_lines.append("(Claims: " + ", ".join(f"{c.claim_id}: {c.text}" for c in turn.claims) + ")")
 
         full_transcript = "\n".join(transcript_lines)
         

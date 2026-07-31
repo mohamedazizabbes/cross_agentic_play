@@ -29,9 +29,11 @@ def main():
     
     for turn in debate_log.turns:
         print(f"\n--- [{turn.speaker}] ({turn.phase}) ---")
-        print(turn.content)
-        if turn.tool_calls:
-            print(f"  [Tools Used: {turn.tool_calls}]")
+        print(turn.raw_text)
+        if turn.claims:
+            print("  [Claims:]")
+            for c in turn.claims:
+                print(f"    [{c.claim_id}] {c.text} (sources: {c.sources or 'none'})")
 
     v = debate_log.verdict
     print("\n" + "=" * 80)
