@@ -5,6 +5,7 @@ from config import Config
 from models import DebateTurn, DebateLog, assign_claim_ids, format_transcript
 from agents.debater import DebaterAgent
 from agents.judge import JudgeAgent
+from agents.fact_checker import FactChecker
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class DebateOrchestrator:
         self.debater_a = DebaterAgent(name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name)
         self.debater_b = DebaterAgent(name="Debater B", stance="CON", topic=self.topic, model_name=self.model_name)
         self.judge = JudgeAgent(model_name=self.model_name)
+        self.fact_checker = FactChecker(model_name=self.model_name)
 
         self.turns: List[DebateTurn] = []
 
@@ -102,7 +104,11 @@ class DebateOrchestrator:
         turn_b_close = self.debater_b.generate_turn(phase="CLOSING", prompt_text=prompt_b_close)
         self._append_turn(turn_b_close)
 
-        # Phase 4: Judging
+        # Phase 4: Fact-Checking (verifies all sourced factual claims before judging)
+        logger.info("--- Phase: Fact-Checking ---")
+        self.fact_checker.verify_turns(self.turns)
+
+        # Phase 5: Judging
         logger.info("--- Phase: Judging ---")
         verdict = self.judge.evaluate_debate(topic=self.topic, turns=self.turns)
 

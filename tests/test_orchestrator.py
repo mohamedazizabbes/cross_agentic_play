@@ -29,6 +29,7 @@ def test_orchestrator_turn_sequence(monkeypatch):
 
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", lambda self, phase, prompt_text: mock_turn)
     monkeypatch.setattr("agents.judge.JudgeAgent.evaluate_debate", lambda self, topic, turns: mock_verdict)
+    monkeypatch.setattr("agents.fact_checker.FactChecker.verify_turns", lambda self, turns: None)
 
     orchestrator = DebateOrchestrator(topic="Test Topic", rebuttal_rounds=1)
     log = orchestrator.run_debate()
@@ -71,6 +72,7 @@ def test_rebuttal_prompt_includes_full_transcript(monkeypatch):
 
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", capturing_generate_turn)
     monkeypatch.setattr("agents.judge.JudgeAgent.evaluate_debate", lambda self, topic, turns: mock_verdict)
+    monkeypatch.setattr("agents.fact_checker.FactChecker.verify_turns", lambda self, turns: None)
 
     orchestrator = DebateOrchestrator(topic="Test Topic", rebuttal_rounds=2)
     orchestrator.run_debate()
