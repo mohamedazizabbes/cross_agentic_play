@@ -32,10 +32,28 @@ class DebaterAgent:
         """
         Sends the prompt to Gemini chat session (with automatic function calling enabled for web_search),
         captures tool calls made during turn, and returns a structured DebateTurn.
+        Includes automatic retry backoff for Gemini API rate limits (429 ResourceExhausted).
         """
+        import time
+        from google.api_core.exceptions import ResourceExhausted
+
         logger.info(f"[{self.name} ({self.stance})] Generating turn for phase: {phase}")
         
-        response = self.chat.send_message(prompt_text)
+        max_retries = 3
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = self.chat.send_message(prompt_text)
+                break
+            except ResourceExhausted as e:
+                wait_sec = 15 * (attempt + 1)
+                logger.warning(f"Rate limit hit for {self.name}. Waiting {wait_sec}s before retry (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_sec)
+        
+        if response is None:
+            # Final fallback if retries exhausted
+            response = self.chat.send_message(prompt_text)
+
         
         # Capture function calls if available in history
         tool_calls: List[Dict[str, str]] = []

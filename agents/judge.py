@@ -106,8 +106,24 @@ class JudgeAgent:
             f"{full_transcript}"
         )
 
+        import time
+        from google.api_core.exceptions import ResourceExhausted
+
         chat = self.model.start_chat(enable_automatic_function_calling=True)
-        response = chat.send_message(prompt)
+        
+        max_retries = 3
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = chat.send_message(prompt)
+                break
+            except ResourceExhausted as e:
+                wait_sec = 15 * (attempt + 1)
+                logger.warning(f"Rate limit hit for Judge. Waiting {wait_sec}s before retry (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_sec)
+        
+        if response is None:
+            response = chat.send_message(prompt)
         
         raw_text = response.text if response.text else ""
         return parse_judge_output(raw_text)
