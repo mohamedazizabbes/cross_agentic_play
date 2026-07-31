@@ -1,0 +1,8 @@
+stateDiagram-v2
+    [*] --> Opinion: no source needed
+    [*] --> Unchecked: factual claim, has source
+    Unchecked --> Verified: FactChecker confirms evidence supports it
+    Unchecked --> Contradicted: FactChecker finds evidence against it
+    Opinion --> [*]
+    Verified --> [*]
+    Contradicted --> [*]

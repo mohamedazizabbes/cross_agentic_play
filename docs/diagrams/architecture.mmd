@@ -1,0 +1,14 @@
+flowchart TD
+    CLI["main.py (CLI)"] --> ORCH["DebateOrchestrator<br/>single process · turn-based · stateless"]
+
+    ORCH --> A["Debater A (PRO)<br/>Gemini chat session"]
+    ORCH --> B["Debater B (CON)<br/>Gemini chat session"]
+    ORCH --> FC["FactChecker"]
+    ORCH --> JUDGE["JudgeAgent<br/>structured output"]
+    ORCH --> LOG[("logs/debate_*.json")]
+
+    A -. web_search .-> DDG[("DuckDuckGo")]
+    B -. web_search .-> DDG
+    FC -. verify sourced claims .-> DDG
+
+    JUDGE --> SCHEMA["JudgeOutputSchema<br/>(Pydantic)"]

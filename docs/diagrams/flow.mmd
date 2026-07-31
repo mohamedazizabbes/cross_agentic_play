@@ -1,0 +1,31 @@
+sequenceDiagram
+    participant O as Orchestrator
+    participant A as Debater A (PRO)
+    participant B as Debater B (CON)
+    participant F as FactChecker
+    participant J as JudgeAgent
+
+    O->>A: Opening prompt
+    A-->>O: Statement + [CLAIMS] block
+    O->>B: Opening prompt
+    B-->>O: Statement + [CLAIMS] block
+
+    loop Rebuttal rounds (--rounds N)
+        O->>A: Full transcript + "rebut B's last claim"
+        A-->>O: Rebuttal, tagged rebuts_claim_id
+        O->>B: Full transcript + "rebut A's last claim"
+        B-->>O: Rebuttal, tagged rebuts_claim_id
+    end
+
+    O->>A: Closing (synthesis only)
+    O->>B: Closing (synthesis only)
+
+    O->>F: Full transcript
+    F->>F: Search + verify sourced factual claims
+    F-->>O: Annotated: verified / contradicted / unchecked
+
+    O->>J: Annotated transcript
+    J->>J: Score 4 axes, flag fallacies
+    J-->>O: JudgeVerdict (schema-validated, PRO/CON/TIE)
+
+    O->>O: Write logs/debate_*.json

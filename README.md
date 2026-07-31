@@ -6,73 +6,23 @@ Built on the `google-genai` SDK (Gemini) with DuckDuckGo for live evidence retri
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    CLI["main.py (CLI)"] --> ORCH["DebateOrchestrator<br/>single process · turn-based · stateless"]
+![Architecture diagram](docs/diagrams/architecture.svg)
 
-    ORCH --> A["Debater A (PRO)<br/>Gemini chat session"]
-    ORCH --> B["Debater B (CON)<br/>Gemini chat session"]
-    ORCH --> FC["FactChecker"]
-    ORCH --> JUDGE["JudgeAgent<br/>structured output"]
-    ORCH --> LOG[("logs/debate_*.json")]
-
-    A -. web_search .-> DDG[("DuckDuckGo")]
-    B -. web_search .-> DDG
-    FC -. verify sourced claims .-> DDG
-
-    JUDGE --> SCHEMA["JudgeOutputSchema<br/>(Pydantic)"]
-```
+*Editable source: [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd)*
 
 ## How a debate flows
 
-```mermaid
-sequenceDiagram
-    participant O as Orchestrator
-    participant A as Debater A (PRO)
-    participant B as Debater B (CON)
-    participant F as FactChecker
-    participant J as JudgeAgent
+![Debate flow diagram](docs/diagrams/flow.svg)
 
-    O->>A: Opening prompt
-    A-->>O: Statement + [CLAIMS] block
-    O->>B: Opening prompt
-    B-->>O: Statement + [CLAIMS] block
-
-    loop Rebuttal rounds (--rounds N)
-        O->>A: Full transcript + "rebut B's last claim"
-        A-->>O: Rebuttal, tagged rebuts_claim_id
-        O->>B: Full transcript + "rebut A's last claim"
-        B-->>O: Rebuttal, tagged rebuts_claim_id
-    end
-
-    O->>A: Closing (synthesis only)
-    O->>B: Closing (synthesis only)
-
-    O->>F: Full transcript
-    F->>F: Search + verify sourced factual claims
-    F-->>O: Annotated: verified / contradicted / unchecked
-
-    O->>J: Annotated transcript
-    J->>J: Score 4 axes, flag fallacies
-    J-->>O: JudgeVerdict (schema-validated, PRO/CON/TIE)
-
-    O->>O: Write logs/debate_*.json
-```
+*Editable source: [`docs/diagrams/flow.mmd`](docs/diagrams/flow.mmd)*
 
 Every turn appends a structured claim block — one line per claim: `<id>|<FACTUAL|OPINION>|"<text>"|<sources>|<rebuts_id>` — so later turns and the judge reference specific claim IDs (e.g. `CON-1-2`) instead of free text.
 
 ### Claim verification lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> Opinion: no source needed
-    [*] --> Unchecked: factual claim, has source
-    Unchecked --> Verified: FactChecker confirms evidence supports it
-    Unchecked --> Contradicted: FactChecker finds evidence against it
-    Opinion --> [*]
-    Verified --> [*]
-    Contradicted --> [*]
-```
+![Claim lifecycle diagram](docs/diagrams/claim_lifecycle.svg)
+
+*Editable source: [`docs/diagrams/claim_lifecycle.mmd`](docs/diagrams/claim_lifecycle.mmd)*
 
 A contradicted or unverifiable citation scores *worse* on the judge's evidence axis than making no factual claim at all.
 
@@ -94,6 +44,8 @@ models.py          Claim / DebateTurn / DebateLog / JudgeVerdict dataclasses + P
 orchestrator.py    DebateOrchestrator — the turn-based pipeline state machine
 main.py            CLI entry point — runs the pipeline, prints summary, saves JSON log
 tests/             Unit tests + gated live integration test
+docs/
+  diagrams/        Mermaid sources (.mmd) + rendered SVGs used in this README
 ```
 
 ## Key design decisions
