@@ -28,20 +28,6 @@ def _fake_debater_turn(role: str, phase: str) -> DebateTurn:
     )
 
 
-class _FakeChats:
-    def create(self, *args, **kwargs):
-        return object()
-
-
-class _FakeClient:
-    def __init__(self):
-        self.chats = _FakeChats()
-
-
-def _fake_get_client():
-    return _FakeClient()
-
-
 def test_golden_pipeline_produces_schema_valid_verdict(monkeypatch, tmp_path):
     """Full pipeline (orchestrator -> fact-check -> judge -> log) on a low-ambiguity topic."""
     def fake_generate_turn(self, phase, prompt_text):
@@ -59,9 +45,6 @@ def test_golden_pipeline_produces_schema_valid_verdict(monkeypatch, tmp_path):
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", fake_generate_turn)
     monkeypatch.setattr("agents.fact_checker.FactChecker.verify_turns", fake_verify_turns)
     monkeypatch.setattr("agents.judge.JudgeAgent.evaluate_debate", fake_evaluate)
-    monkeypatch.setattr("agents.debater.get_client", _fake_get_client)
-    monkeypatch.setattr("agents.fact_checker.get_client", _fake_get_client)
-    monkeypatch.setattr("agents.judge.get_client", _fake_get_client)
     monkeypatch.setattr("config.Config.LOG_DIR", str(tmp_path))
 
     orchestrator = DebateOrchestrator(

@@ -2,24 +2,13 @@ from models import Claim, DebateTurn
 from agents.fact_checker import FactChecker
 
 
-class FakeClient:
-    def __init__(self, responses):
-        class Models:
-            def __init__(self, responses):
-                self._responses = list(responses)
-
-            def generate_content(self, model, contents, config=None):
-                class Resp:
-                    text = ""
-                Resp.text = self._responses.pop(0)
-                return Resp()
-
-        self.models = Models(responses)
-
-
 def make_checker(monkeypatch, responses):
-    fake_client = FakeClient(responses)
-    monkeypatch.setattr("agents.fact_checker.get_client", lambda: fake_client)
+    queue = list(responses)
+
+    def fake_complete(model, messages, system=None, **kwargs):
+        return queue.pop(0)
+
+    monkeypatch.setattr("agents.fact_checker.complete", fake_complete)
     return FactChecker(model_name="fake-model")
 
 

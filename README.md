@@ -1,6 +1,6 @@
 # AI Debate Arena
 
-Two Gemini agents debate any proposition — PRO vs CON. A third agent independently fact-checks their claims with live web search, and a judge scores the round on four axes and names a winner. All in a single stateless Python pipeline. No agent framework, no orchestration server, no external services beyond the Gemini API and DuckDuckGo.
+Two agents debate any proposition — PRO vs CON. A third agent independently fact-checks their claims with live web search, and a judge scores the round on four axes and names a winner. All in a single stateless Python pipeline. Works with **Gemini, Groq, or OpenRouter** (free keys supported). No agent framework, no orchestration server, no external services beyond the LLM API and DuckDuckGo.
 
 ![Demo](docs/demo.gif)
 
@@ -64,14 +64,29 @@ docs/
 
 ## Configuration
 
+Set `LLM_PROVIDER` to pick the backend. Gemini is the default; Groq and OpenRouter both accept **free** API keys.
+
 | Variable | Default | Description |
 |---|---|---|
-| `GOOGLE_API_KEY` | *(required)* | Gemini API key from Google AI Studio |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Model used by all agents |
+| `LLM_PROVIDER` | `gemini` | Backend: `gemini`, `groq`, or `openrouter` |
+| `GOOGLE_API_KEY` | *(required for gemini)* | Gemini API key from Google AI Studio |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model |
+| `GROQ_API_KEY` | *(required for groq)* | Free key from https://console.groq.com/keys |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model |
+| `OPENROUTER_API_KEY` | *(required for openrouter)* | Free key from https://openrouter.ai/settings/keys |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-chat-v3-0324:free` | OpenRouter model (`:free` = no-cost) |
 | `DEFAULT_REBUTTAL_ROUNDS` | `2` | Rebuttal rounds when `--rounds` isn't passed |
 | `LOG_DIR` | `logs` | Directory for structured JSON debate logs |
 
-> The free Gemini tier limits requests per day per model (e.g. 20 req/day for `gemini-2.5-flash`). A full debate consumes several calls per side plus fact-checking and judging — budget accordingly.
+To switch provider, set `LLM_PROVIDER` and the matching key/model in `.env` — for example:
+
+```
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+> Free tiers are rate-limited per day (e.g. Gemini ~20 req/day/model). A full debate consumes several calls per side plus fact-checking and judging — budget accordingly, or switch providers.
 
 ## Design decisions
 

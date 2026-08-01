@@ -14,7 +14,7 @@ class DebateOrchestrator:
     def __init__(self, topic: str, rebuttal_rounds: int = None, model_name: str = None):
         self.topic = topic
         self.rebuttal_rounds = rebuttal_rounds if rebuttal_rounds is not None else Config.DEFAULT_REBUTTAL_ROUNDS
-        self.model_name = model_name or Config.GEMINI_MODEL
+        self.model_name = model_name or Config.llm_model()
 
         self.debater_a = DebaterAgent(name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name)
         self.debater_b = DebaterAgent(name="Debater B", stance="CON", topic=self.topic, model_name=self.model_name)

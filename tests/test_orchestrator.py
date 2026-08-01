@@ -1,25 +1,5 @@
-from models import DebateTurn, Claim, JudgeVerdict
+﻿from models import DebateTurn, Claim, JudgeVerdict
 from orchestrator import DebateOrchestrator
-
-
-class _FakeChats:
-    def create(self, *args, **kwargs):
-        return object()
-
-
-class _FakeClient:
-    def __init__(self):
-        self.chats = _FakeChats()
-
-
-def _fake_get_client():
-    return _FakeClient()
-
-
-def _stub_clients(monkeypatch):
-    monkeypatch.setattr("agents.debater.get_client", _fake_get_client)
-    monkeypatch.setattr("agents.fact_checker.get_client", _fake_get_client)
-    monkeypatch.setattr("agents.judge.get_client", _fake_get_client)
 
 
 def test_orchestrator_turn_sequence(monkeypatch):
@@ -50,7 +30,6 @@ def test_orchestrator_turn_sequence(monkeypatch):
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", lambda self, phase, prompt_text: mock_turn)
     monkeypatch.setattr("agents.judge.JudgeAgent.evaluate_debate", lambda self, topic, turns: mock_verdict)
     monkeypatch.setattr("agents.fact_checker.FactChecker.verify_turns", lambda self, turns: None)
-    _stub_clients(monkeypatch)
 
     orchestrator = DebateOrchestrator(topic="Test Topic", rebuttal_rounds=1)
     log = orchestrator.run_debate()
@@ -94,7 +73,6 @@ def test_rebuttal_prompt_includes_full_transcript(monkeypatch):
     monkeypatch.setattr("agents.debater.DebaterAgent.generate_turn", capturing_generate_turn)
     monkeypatch.setattr("agents.judge.JudgeAgent.evaluate_debate", lambda self, topic, turns: mock_verdict)
     monkeypatch.setattr("agents.fact_checker.FactChecker.verify_turns", lambda self, turns: None)
-    _stub_clients(monkeypatch)
 
     orchestrator = DebateOrchestrator(topic="Test Topic", rebuttal_rounds=2)
     orchestrator.run_debate()
@@ -111,3 +89,4 @@ def test_rebuttal_prompt_includes_full_transcript(monkeypatch):
     # The second rebuttal round must see turns from the first rebuttal round too
     final_prompt = rebuttal_prompts[-1]
     assert "Content for REBUTTAL_1" in final_prompt
+

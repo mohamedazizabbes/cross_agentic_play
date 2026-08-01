@@ -2,11 +2,10 @@ import json
 import re
 import logging
 from typing import List, Optional
-from google.genai import types
 from config import Config
 from models import DebateTurn, JudgeVerdict, validate_judge_verdict, format_transcript, JudgeOutputSchema
 from agents.prompts import JUDGE_SYSTEM_PROMPT
-from utils.gemini import get_client, send_with_retry
+from utils.llm import complete
 
 logger = logging.getLogger(__name__)
 
@@ -56,24 +55,15 @@ def parse_judge_output(raw_output: str) -> JudgeVerdict:
 
 class JudgeAgent:
     def __init__(self, model_name: str = None):
-        self.model_name = model_name or Config.GEMINI_MODEL
-        self.client = get_client()
+        self.model_name = model_name or Config.llm_model()
 
-    def _verdict_config(self) -> types.GenerateContentConfig:
-        return types.GenerateContentConfig(
-            system_instruction=JUDGE_SYSTEM_PROMPT,
-            response_mime_type="application/json",
+    def _generate_json(self, prompt: str) -> str:
+        return complete(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            system=JUDGE_SYSTEM_PROMPT,
+            json_mode=True,
             response_schema=JudgeOutputSchema,
-        )
-
-    def _generate_json(self, prompt: str) -> types.GenerateContentResponse:
-        return send_with_retry(
-            lambda: self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=self._verdict_config(),
-            ),
-            label="Judge",
         )
 
     def _parse_with_reask(self, prompt: str, text: str, max_reasks: int = 2) -> Optional[JudgeVerdict]:
@@ -93,17 +83,14 @@ class JudgeAgent:
                     f"Your previous verdict JSON failed schema validation: {e}. "
                     "Respond with ONLY a valid JSON verdict matching the required schema."
                 )
-                response = self._generate_json(reask_prompt)
-                if response is None or not response.text:
-                    return None
-                text = response.text
+                text = self._generate_json(reask_prompt)
                 data = _extract_json_dict(text)
         return None
 
     def evaluate_debate(self, topic: str, turns: List[DebateTurn]) -> JudgeVerdict:
         """
         Evaluates the full debate transcript and returns a schema-validated JudgeVerdict.
-        Uses Gemini structured output (Pydantic response_schema) with a retry-with-reask loop;
+        Uses structured output (JSON mode + schema) with a retry-with-reask loop;
         falls back to tolerant text parsing if structured mode is unavailable.
         """
         logger.info("Judge is evaluating debate transcript...")
@@ -117,9 +104,9 @@ class JudgeAgent:
 
         # Pass 1: structured output mode (schema-enforced)
         try:
-            response = self._generate_json(prompt)
-            if response is not None and response.text:
-                verdict = self._parse_with_reask(prompt, response.text)
+            text = self._generate_json(prompt)
+            if text:
+                verdict = self._parse_with_reask(prompt, text)
                 if verdict is not None:
                     return verdict
         except Exception as e:
@@ -128,16 +115,12 @@ class JudgeAgent:
         # Fallback: plain text mode with tolerant parsing
         logger.warning("Falling back to text-based judge parsing.")
         try:
-            text_config = types.GenerateContentConfig(system_instruction=JUDGE_SYSTEM_PROMPT)
-            response = send_with_retry(
-                lambda: self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=text_config,
-                ),
-                label="Judge",
+            text = complete(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                system=JUDGE_SYSTEM_PROMPT,
             )
-            return parse_judge_output(response.text or "")
+            return parse_judge_output(text or "")
         except Exception as e:
             logger.warning(f"Judge unavailable ({type(e).__name__}); returning TIE verdict.")
             return parse_judge_output("")

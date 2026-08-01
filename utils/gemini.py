@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Any, Callable
 from google import genai
-from google.genai import types, errors
+from google.genai import errors
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -35,46 +35,3 @@ def send_with_retry(sender: Callable[[], Any], label: str = "Gemini", max_retrie
             time.sleep(wait_sec)
     # Final fallback attempt; propagates the error if it still fails.
     return sender()
-
-
-def _content_parts(response) -> list:
-    if not response or not response.candidates:
-        return []
-    return list(response.candidates[0].content.parts or [])
-
-
-def send_message_with_function_calling(chat, message, execute_tool, max_function_calls: int = 5) -> types.GenerateContentResponse:
-    """Sends a chat message, automatically executing any tool (function_call) parts the model emits.
-
-    The google-genai SDK does not auto-execute local Python tools, so we loop manually:
-    for every function_call part the model emits, run the tool and feed the result back as a
-    function_response until the model returns a final (text) answer.
-    """
-    response = send_with_retry(lambda: chat.send_message(message), label="chat")
-
-    for _ in range(max_function_calls):
-        parts = _content_parts(response)
-        calls = [p.function_call for p in parts if p.function_call]
-        if not calls:
-            return response
-
-        function_responses = []
-        for fc in calls:
-            args = dict(fc.args or {})
-            logger.info(f"Executing tool call: {fc.name}({args})")
-            result = execute_tool(**args)
-            function_responses.append(
-                types.Part(
-                    function_response=types.FunctionResponse(
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                )
-            )
-
-        response = send_with_retry(
-            lambda: chat.send_message(function_responses),
-            label="chat (tool results)",
-        )
-
-    return response

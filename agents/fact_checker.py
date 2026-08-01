@@ -1,10 +1,9 @@
 import logging
 from typing import List
-from google.genai import types
 from config import Config
 from models import DebateTurn, Claim
 from tools.web_search import web_search
-from utils.gemini import get_client, send_with_retry
+from utils.llm import complete
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +17,7 @@ FACTCHECK_SYSTEM_PROMPT = (
 
 class FactChecker:
     def __init__(self, model_name: str = None):
-        self.model_name = model_name or Config.GEMINI_MODEL
-        self.client = get_client()
+        self.model_name = model_name or Config.llm_model()
 
     def verify_turns(self, turns: List[DebateTurn]) -> None:
         """Verifies every factual claim that carries a source, annotating the Claim in place."""
@@ -58,13 +56,8 @@ class FactChecker:
         claim.verification_note = f"{verdict}: {reason}"
 
     def _ask(self, prompt: str) -> str:
-        config = types.GenerateContentConfig(system_instruction=FACTCHECK_SYSTEM_PROMPT)
-        response = send_with_retry(
-            lambda: self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=config,
-            ),
-            label="FactChecker",
+        return complete(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            system=FACTCHECK_SYSTEM_PROMPT,
         )
-        return response.text.strip() if response.text else ""

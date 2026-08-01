@@ -3,13 +3,38 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+PROVIDERS = ("gemini", "groq", "openrouter")
+
 class Config:
+    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3-0324:free")
     DEFAULT_REBUTTAL_ROUNDS = int(os.getenv("DEFAULT_REBUTTAL_ROUNDS", "2"))
     LOG_DIR = os.getenv("LOG_DIR", "logs")
 
     @classmethod
+    def llm_model(cls):
+        return {
+            "gemini": cls.GEMINI_MODEL,
+            "groq": cls.GROQ_MODEL,
+            "openrouter": cls.OPENROUTER_MODEL,
+        }.get(cls.LLM_PROVIDER, cls.GEMINI_MODEL)
+
+    @classmethod
     def validate(cls):
-        if not cls.GOOGLE_API_KEY:
-            raise ValueError("GOOGLE_API_KEY environment variable is required. Please check your .env file.")
+        if cls.LLM_PROVIDER not in PROVIDERS:
+            raise ValueError(f"LLM_PROVIDER must be one of {PROVIDERS}, got '{cls.LLM_PROVIDER}'.")
+        required_key = {
+            "gemini": "GOOGLE_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+        }.get(cls.LLM_PROVIDER)
+        if not getattr(cls, required_key):
+            raise ValueError(
+                f"{required_key} environment variable is required when LLM_PROVIDER={cls.LLM_PROVIDER}. "
+                "Please check your .env file."
+            )
