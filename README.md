@@ -1,22 +1,32 @@
 # AI Debate Arena
 
-A domain-agnostic multi-agent debate platform. Two AI debaters argue opposing stances on any proposition, backed by live web search, an independent fact-checking pass, and a judge that scores the debate on four axes and returns a schema-validated verdict.
+Two Gemini agents debate any proposition — PRO vs CON. A third agent independently fact-checks their claims with live web search, and a judge scores the round on four axes and names a winner. All in a single stateless Python pipeline. No agent framework, no orchestration server, no external services beyond the Gemini API and DuckDuckGo.
 
-Built on the `google-genai` SDK (Gemini) with DuckDuckGo for live evidence retrieval.
+![Demo](docs/demo.gif)
 
-## Architecture
+## Quick start
 
-![Architecture diagram](docs/diagrams/architecture.svg)
+```bash
+python -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env          # then add GOOGLE_API_KEY
+```
 
-*Editable source: [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd)*
+```bash
+python main.py "Universal Basic Income should be implemented globally"
+python main.py "Coffee is the second most traded commodity after oil" --rounds 1
+```
+
+The CLI prints the full phase-by-phase transcript (speaker, phase, prose, structured claims), the judge's reasoning, flagged fallacies, per-axis scores, and the winner. A structured JSON log of the entire debate is saved to `logs/debate_<timestamp>.json`.
 
 ## How a debate flows
+
+Every turn appends a structured claim block — one line per claim: `<id>|<FACTUAL|OPINION>|"<text>"|<sources>|<rebuts_id>` — so later turns and the judge reference specific claim IDs (e.g. `CON-1-2`) instead of free text.
 
 ![Debate flow diagram](docs/diagrams/flow.svg)
 
 *Editable source: [`docs/diagrams/flow.mmd`](docs/diagrams/flow.mmd)*
-
-Every turn appends a structured claim block — one line per claim: `<id>|<FACTUAL|OPINION>|"<text>"|<sources>|<rebuts_id>` — so later turns and the judge reference specific claim IDs (e.g. `CON-1-2`) instead of free text.
 
 ### Claim verification lifecycle
 
@@ -26,7 +36,11 @@ Every turn appends a structured claim block — one line per claim: `<id>|<FACTU
 
 A contradicted or unverifiable citation scores *worse* on the judge's evidence axis than making no factual claim at all.
 
-## Repository structure
+## Architecture
+
+![Architecture diagram](docs/diagrams/architecture.svg)
+
+*Editable source: [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd)*
 
 ```
 agents/
@@ -48,29 +62,7 @@ docs/
   diagrams/        Mermaid sources (.mmd) + rendered SVGs used in this README
 ```
 
-## Key design decisions
-
-- **Single process, stateless, turn-based.** No MCP, no RAG, no agent-to-agent messaging — the orchestrator holds the full transcript and injects it into every prompt.
-- **Full-transcript context.** Debaters see the entire debate so far, formatted with claim IDs, on every turn — no context loss across rounds.
-- **Structured claims, tolerant parsing.** Claim blocks are parsed per line; malformed lines are skipped with a warning instead of failing the whole turn.
-- **Search policy.** `web_search` is reserved for `FACTUAL` claims; if search is unavailable, the model is instructed to never fabricate a URL and fall back to reasoning instead.
-- **Judge output is schema-enforced.** Gemini returns the verdict via `response_schema`; invalid JSON triggers a re-ask loop (up to 2 attempts), then a tolerant text fallback.
-- **Resilience.** 429/5xx retries with backoff (`utils/gemini.py`); `web_search` returns a structured error object instead of raising once retries are exhausted.
-
-## Installation
-
-```bash
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-Set in `.env`:
-```
-GOOGLE_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-```
+## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
@@ -81,47 +73,14 @@ GEMINI_MODEL=gemini-2.5-flash
 
 > The free Gemini tier limits requests per day per model (e.g. 20 req/day for `gemini-2.5-flash`). A full debate consumes several calls per side plus fact-checking and judging — budget accordingly.
 
-## Usage
+## Design decisions
 
-```bash
-python main.py "Universal Basic Income should be implemented globally"
-python main.py "The Great Wall of China is visible from low Earth orbit" --rounds 1
-```
-
-Prints a phase-by-phase transcript (speaker, phase, prose, structured claims), the judge's reasoning, flagged fallacies, per-axis scores, and the winner. A full structured log is saved to `logs/debate_<timestamp>.json`:
-
-```json
-{
-  "topic": "...",
-  "timestamp": "...",
-  "model_used": "gemini-2.5-flash",
-  "turns": [
-    {
-      "speaker": "Debater A (PRO)",
-      "role": "PRO",
-      "phase": "OPENING",
-      "claims": [
-        {
-          "claim_id": "PRO-1-1",
-          "is_factual": true,
-          "sources": ["..."],
-          "rebuts_claim_id": null,
-          "verified": true,
-          "verification_note": "YES: ..."
-        }
-      ],
-      "raw_text": "..."
-    }
-  ],
-  "verdict": {
-    "winner": "PRO",
-    "scores": { "logical_coherence": {"A": 8.5, "B": 8.0} },
-    "reasoning": "...",
-    "flagged_fallacies": [],
-    "unverified_or_contradicted_claims": []
-  }
-}
-```
+- **Single process, stateless, turn-based.** No MCP, no RAG, no agent-to-agent messaging — the orchestrator holds the full transcript and injects it into every prompt.
+- **Full-transcript context.** Debaters see the entire debate so far, formatted with claim IDs, on every turn — no context loss across rounds.
+- **Structured claims, tolerant parsing.** Claim blocks are parsed per line; malformed lines are skipped with a warning instead of failing the whole turn.
+- **Search policy.** `web_search` is reserved for `FACTUAL` claims; if search is unavailable, the model is instructed to never fabricate a URL and fall back to reasoning instead.
+- **Judge output is schema-enforced.** Gemini returns the verdict via `response_schema`; invalid JSON triggers a re-ask loop (up to 2 attempts), then a tolerant text fallback.
+- **Resilience.** 429/5xx retries with backoff (`utils/gemini.py`); `web_search` returns a structured error object instead of raising once retries are exhausted.
 
 ## Testing
 
@@ -138,3 +97,14 @@ pytest -m integration     # live end-to-end debate (calls Gemini + DuckDuckGo)
 - [ ] Blind judging (judge doesn't know which debater = which model)
 - [ ] Multi-judge panel with score aggregation
 - [ ] Live co-judge mode for real competitive debate rounds — transcribes a live round, fact-checks claims in real time, drafts a ballot for a human judge to review and submit (never auto-decides)
+
+## Why not LangGraph / AutoGen / CrewAI / MCP / RAG?
+
+This project deliberately uses none of them.
+
+- **No agent framework.** The pipeline is two actors (debaters) plus a verifier and a judge, orchestrated by a single loop that passes a full transcript. Adding LangGraph or AutoGen buys a graph DSL and a message bus this design doesn't need — and the pipeline state machine in `orchestrator.py` is ~150 lines you can read in one sitting.
+- **No MCP.** The only tool is `web_search`; wiring a single function call into `google-genai`'s function-calling loop is simpler than running an MCP server.
+- **No RAG / vector store.** Debaters search on demand, per claim, and the judge re-checks. There is no corpus to index — embedding it would add latency and a dependency without improving evidence quality.
+- **No agent-to-agent messaging.** Debaters never talk to each other; they both see the full transcript every turn. The judge only reads. This keeps every model call reproducible and makes the debate log a single source of truth.
+
+If you want dozens of autonomous agents negotiating over a message bus, this isn't the repo. If you want a readable, testable, ~150-line multi-agent debate you can fork in an afternoon, it is.

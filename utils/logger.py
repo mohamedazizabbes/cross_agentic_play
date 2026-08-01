@@ -5,14 +5,19 @@ from datetime import datetime
 from config import Config
 from models import DebateLog
 
+# Third-party loggers that spam HTTP/network chatter at INFO level.
+_QUIET_LOGGERS = ("httpx", "httpcore", "primp", "duckduckgo_search")
+
 
 def setup_logging():
-    """Configures standard logging formatting."""
+    """Configures standard logging formatting and quiets noisy dependency loggers."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S"
     )
+    for name in _QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def save_debate_log(debate_log: DebateLog) -> str:

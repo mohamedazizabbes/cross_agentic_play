@@ -1,5 +1,4 @@
 import logging
-from typing import List
 from google.genai import types
 from config import Config
 from models import DebateTurn, parse_claims

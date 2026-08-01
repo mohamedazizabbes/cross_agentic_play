@@ -30,15 +30,20 @@ class FactChecker:
 
     def _verify_claim(self, claim: Claim) -> None:
         query = claim.text.strip() or " ".join(claim.text.split())[:100]
-        snippets = web_search(query[:200], max_results=3)
-
-        prompt = (
-            f"CLAIM: {claim.text}\n\n"
-            f"CLAIM'S CITED SOURCES: {claim.sources}\n\n"
-            f"LIVE SEARCH SNIPPETS:\n{snippets}\n\n"
-            "Does the available evidence SUPPORT, CONTRADICT, or neither (PARTIAL/UNCLEAR) this claim?"
-        )
-        line = self._ask(prompt)
+        try:
+            snippets = web_search(query[:200], max_results=3)
+            prompt = (
+                f"CLAIM: {claim.text}\n\n"
+                f"CLAIM'S CITED SOURCES: {claim.sources}\n\n"
+                f"LIVE SEARCH SNIPPETS:\n{snippets}\n\n"
+                "Does the available evidence SUPPORT, CONTRADICT, or neither (PARTIAL/UNCLEAR) this claim?"
+            )
+            line = self._ask(prompt)
+        except Exception as e:
+            logger.warning(f"Fact-check unavailable for claim {claim.claim_id} ({type(e).__name__}); marking unverified.")
+            claim.verified = None
+            claim.verification_note = "UNVERIFIED: fact-checking unavailable"
+            return
 
         verdict, _, reason = line.partition("|")
         verdict = verdict.strip().upper()

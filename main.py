@@ -1,4 +1,3 @@
-import sys
 import argparse
 from config import Config
 from orchestrator import DebateOrchestrator

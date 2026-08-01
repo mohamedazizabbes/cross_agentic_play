@@ -127,13 +127,17 @@ class JudgeAgent:
 
         # Fallback: plain text mode with tolerant parsing
         logger.warning("Falling back to text-based judge parsing.")
-        text_config = types.GenerateContentConfig(system_instruction=JUDGE_SYSTEM_PROMPT)
-        response = send_with_retry(
-            lambda: self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=text_config,
-            ),
-            label="Judge",
-        )
-        return parse_judge_output(response.text or "")
+        try:
+            text_config = types.GenerateContentConfig(system_instruction=JUDGE_SYSTEM_PROMPT)
+            response = send_with_retry(
+                lambda: self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=text_config,
+                ),
+                label="Judge",
+            )
+            return parse_judge_output(response.text or "")
+        except Exception as e:
+            logger.warning(f"Judge unavailable ({type(e).__name__}); returning TIE verdict.")
+            return parse_judge_output("")

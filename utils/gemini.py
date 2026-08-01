@@ -73,7 +73,7 @@ def send_message_with_function_calling(chat, message, execute_tool, max_function
             )
 
         response = send_with_retry(
-            lambda: chat.send_message(types.Content(parts=function_responses)),
+            lambda: chat.send_message(function_responses),
             label="chat (tool results)",
         )
 
