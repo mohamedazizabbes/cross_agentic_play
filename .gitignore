@@ -33,3 +33,6 @@ venv.bak/
 # Logs and Data
 logs/
 .pytest_cache/
+
+# Local working notes (not committed)
+PLAN.md
