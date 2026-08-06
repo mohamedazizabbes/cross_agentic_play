@@ -28,6 +28,25 @@ The CI badge reflects `pytest` (unit tests only). The live integration suite in 
 - Follow the existing module layout: agents / tools / utils, with Pydantic models and schemas in `models.py`.
 - No comments unless they explain a non-obvious decision.
 
+## Secret scanning (gitleaks)
+
+A pre-commit hook scans staged changes for accidentally committed secrets (API keys, PATs).
+Install it once:
+
+```bash
+bash scripts/install-hooks.sh   # or PowerShell: .\scripts\install-hooks.ps1
+```
+
+gitleaks must be on your PATH. The same scan runs in CI (`.github/workflows/tests.yml`),
+so a secret slipped into a commit will fail the `secret-scan` job.
+
+## CLI flags
+
+- `--no-cache` — bypass the on-disk LLM response cache (`.cache/`).
+- `--multi-judge` — ask every configured provider for a verdict and aggregate the results.
+- `--human PRO|CON` — type rebuttals for a side instead of letting the AI generate them.
+- `--export <path>` — write the debate transcript to Markdown/HTML (by file extension).
+
 ## Opening a PR
 
 - New features should ship with a test, mirroring the existing `tests/` pattern (`tests/test_*.py`, offline by default).
