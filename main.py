@@ -1,21 +1,52 @@
 import argparse
 from config import Config
 from orchestrator import DebateOrchestrator
-from utils.logger import setup_logging, save_debate_log
+from utils.logger import setup_logging, save_debate_log, export_debate
+from utils.quota import QuotaTracker
+import utils.llm as llm
 
 
 def main():
     parser = argparse.ArgumentParser(description="AI Debate Arena — Multi-Agent Debate Platform")
-    parser.add_argument("topic", type=str, nargs="?", default="Should AI agents be granted legal personality?",
-                        help="Debate topic proposition")
-    parser.add_argument("--rounds", type=int, default=Config.DEFAULT_REBUTTAL_ROUNDS,
-                        help="Number of rebuttal rounds (default: 2)")
+    parser.add_argument(
+        "topic",
+        type=str,
+        nargs="?",
+        default="Should AI agents be granted legal personality?",
+        help="Debate topic proposition",
+    )
+    parser.add_argument(
+        "--rounds", type=int, default=Config.DEFAULT_REBUTTAL_ROUNDS, help="Number of rebuttal rounds (default: 2)"
+    )
+    parser.add_argument(
+        "--no-cache", action="store_true", help="Bypass the on-disk LLM response cache (default: cache enabled)"
+    )
+    parser.add_argument(
+        "--multi-judge", action="store_true", help="Query all configured LLM providers for a verdict and aggregate them"
+    )
+    parser.add_argument(
+        "--human",
+        choices=["PRO", "CON"],
+        default=None,
+        help="Let a human type the rebuttals for this side instead of the AI",
+    )
+    parser.add_argument(
+        "--export", type=str, default=None, help="Export the debate transcript to Markdown/HTML (.md or .html path)"
+    )
     args = parser.parse_args()
 
     setup_logging()
     Config.validate()
+    llm.set_cache_enabled(not args.no_cache)
 
-    orchestrator = DebateOrchestrator(topic=args.topic, rebuttal_rounds=args.rounds)
+    QuotaTracker.print_summary()
+
+    orchestrator = DebateOrchestrator(
+        topic=args.topic,
+        rebuttal_rounds=args.rounds,
+        human_side=args.human,
+        multi_judge=args.multi_judge,
+    )
     debate_log = orchestrator.run_debate()
 
     # Save structured log to file
@@ -25,7 +56,7 @@ def main():
     print("\n" + "=" * 80)
     print(f" DEBATE SUMMARY: '{debate_log.topic}'")
     print("=" * 80)
-    
+
     for turn in debate_log.turns:
         print(f"\n--- [{turn.speaker}] ({turn.phase}) ---")
         print(turn.raw_text)
@@ -53,6 +84,10 @@ def main():
     print(f"\n>>> WINNER: {v.winner} <<<")
     print("=" * 80)
     print(f"\nStructured log saved to: {filepath}\n")
+
+    if args.export:
+        export_path = export_debate(debate_log, args.export)
+        print(f"Transcript exported to: {export_path}")
 
 
 if __name__ == "__main__":

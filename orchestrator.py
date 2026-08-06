@@ -11,14 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 class DebateOrchestrator:
-    def __init__(self, topic: str, rebuttal_rounds: int = None, model_name: str = None):
+    def __init__(
+        self,
+        topic: str,
+        rebuttal_rounds: int = None,
+        model_name: str = None,
+        human_side: str = None,
+        multi_judge: bool = False,
+    ):
         self.topic = topic
         self.rebuttal_rounds = rebuttal_rounds if rebuttal_rounds is not None else Config.DEFAULT_REBUTTAL_ROUNDS
         self.model_name = model_name or Config.llm_model()
+        self.human_side = (human_side or "").upper()
+        self.multi_judge = multi_judge
 
-        self.debater_a = DebaterAgent(name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name)
-        self.debater_b = DebaterAgent(name="Debater B", stance="CON", topic=self.topic, model_name=self.model_name)
-        self.judge = JudgeAgent(model_name=self.model_name)
+        self.debater_a = DebaterAgent(
+            name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name, human=self.human_side == "PRO"
+        )
+        self.debater_b = DebaterAgent(
+            name="Debater B", stance="CON", topic=self.topic, model_name=self.model_name, human=self.human_side == "CON"
+        )
+        self.judge = JudgeAgent(model_name=self.model_name, multi_judge=self.multi_judge)
         self.fact_checker = FactChecker(model_name=self.model_name)
 
         self.turns: List[DebateTurn] = []
@@ -64,7 +77,7 @@ class DebateOrchestrator:
             last_turn_b = self.turns[-1]
             prompt_a_reb = (
                 f"Rebuttal Round {r}: Respond directly to Debater B's most recent statement:\n"
-                f"\"{last_turn_b.raw_text}\"\n\n"
+                f'"{last_turn_b.raw_text}"\n\n'
                 f"Full debate so far (refer to claims by their exact claim ID):\n{self._prompt_context()}\n\n"
                 "Refute their specific claims point-by-point. For each opponent claim you refute, "
                 "set the 'rebuts_claim_id' field to the exact claim ID shown above. "
@@ -77,7 +90,7 @@ class DebateOrchestrator:
             last_turn_a = self.turns[-1]
             prompt_b_reb = (
                 f"Rebuttal Round {r}: Respond directly to Debater A's most recent statement:\n"
-                f"\"{last_turn_a.raw_text}\"\n\n"
+                f'"{last_turn_a.raw_text}"\n\n'
                 f"Full debate so far (refer to claims by their exact claim ID):\n{self._prompt_context()}\n\n"
                 "Refute their specific claims point-by-point. For each opponent claim you refute, "
                 "set the 'rebuts_claim_id' field to the exact claim ID shown above. "
@@ -117,7 +130,7 @@ class DebateOrchestrator:
             timestamp=datetime.now().isoformat(),
             model_used=self.model_name,
             turns=self.turns,
-            verdict=verdict
+            verdict=verdict,
         )
 
         logger.info("=== DEBATE COMPLETE ===")
