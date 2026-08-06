@@ -1,0 +1,12 @@
+#!/bin/sh
+# gitleaks pre-commit hook.
+# Scans staged changes for accidentally committed secrets (API keys, PATs, etc.).
+# Skips silently if gitleaks is not installed. Install with scripts/install-hooks.sh
+# (or scripts/install-hooks.ps1 on Windows / Git Bash).
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks not installed; skipping secret scan (see CONTRIBUTING.md)."
+  exit 0
+fi
+
+exec gitleaks protect --staged --verbose --exit-code 1
