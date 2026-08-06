@@ -34,5 +34,9 @@ venv.bak/
 logs/
 .pytest_cache/
 
+# Local LLM quota state and response cache (machine-local)
+.quota_state.json
+.cache/
+
 # Local working notes (not committed)
 PLAN.md

@@ -8,13 +8,22 @@ from google.genai import types as genai_types
 from google.genai import errors as genai_errors
 
 from config import Config
+from utils.cache import ResponseCache
 from utils.gemini import get_client as get_gemini_client
+from utils.quota import QuotaTracker
 
 logger = logging.getLogger(__name__)
 
 
 class LLMError(Exception):
     pass
+
+
+class QuotaExceededError(LLMError):
+    """Raised when a provider keeps returning 429/quota errors after retries.
+
+    `complete()` catches this to retry the same call on the next configured provider.
+    """
 
 
 def _status_code(e: BaseException) -> Optional[int]:
@@ -32,22 +41,43 @@ def _is_retryable(e: BaseException) -> bool:
     return "Rate limit" in str(e) or "quota" in str(e).lower()
 
 
-def send_with_retry(sender: Callable[[], Any], label: str = "request", max_retries: int = 3) -> Any:
-    """Invokes `sender()`, retrying on 429 rate limits and transient 5xx errors with backoff."""
+def _is_quota_error(e: BaseException) -> bool:
+    code = _status_code(e)
+    if code is not None:
+        return code == 429
+    msg = str(e).lower()
+    return "quota" in msg or "rate limit" in msg or "resource_exhausted" in msg or "429" in msg
+
+
+def send_with_retry(
+    sender: Callable[[], Any],
+    label: str = "request",
+    max_retries: int = 3,
+    retry_delay: float = 2.0,
+) -> Any:
+    """Invokes `sender()`, retrying 429 rate limits and transient 5xx errors with
+    exponential backoff. If a quota/429 error still persists, raises QuotaExceededError
+    so the caller can fall back to another provider. Other transient errors propagate
+    as-is after retries are exhausted."""
+    last_error: Optional[BaseException] = None
     for attempt in range(max_retries):
         try:
             return sender()
         except (genai_errors.APIError, OpenAIAPIError) as e:
             if not _is_retryable(e):
                 raise
-            wait_sec = 15 * (attempt + 1)
+            last_error = e
+            if attempt == max_retries - 1:
+                break
+            wait_sec = retry_delay * (2**attempt)
             logger.warning(
-                f"Rate limit/transient error for {label}. Waiting {wait_sec}s before retry "
-                f"(attempt {attempt+1}/{max_retries})..."
+                f"Rate limit/transient error for {label}. Waiting {wait_sec:.0f}s before retry "
+                f"(attempt {attempt + 1}/{max_retries})..."
             )
             time.sleep(wait_sec)
-    # Final fallback attempt; propagates the error if it still fails.
-    return sender()
+    if _is_quota_error(last_error):
+        raise QuotaExceededError(f"Quota exceeded for {label}: {last_error}") from last_error
+    raise last_error
 
 
 def _to_schema(schema: Any) -> Any:
@@ -200,9 +230,16 @@ class OpenAICompatProvider:
         if tools:
             kwargs["tools"] = tools
         if json_mode:
-            schema = response_schema.model_json_schema() if hasattr(response_schema, "model_json_schema") else response_schema
+            schema = (
+                response_schema.model_json_schema()
+                if hasattr(response_schema, "model_json_schema")
+                else response_schema
+            )
             if schema:
-                kwargs["response_format"] = {"type": "json_schema", "json_schema": {"name": "verdict", "schema": schema}}
+                kwargs["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": "verdict", "schema": schema},
+                }
             else:
                 kwargs["response_format"] = {"type": "json_object"}
 
@@ -249,10 +286,23 @@ class OpenAICompatProvider:
 
 
 _providers: Dict[str, Any] = {}
+_cache_enabled: Optional[bool] = None
 
 
-def _get_provider() -> Any:
-    provider = Config.LLM_PROVIDER
+def set_cache_enabled(enabled: bool) -> None:
+    """Globally toggles the on-disk response cache (used by the --no-cache CLI flag)."""
+    global _cache_enabled
+    _cache_enabled = enabled
+
+
+def _cache_is_enabled() -> bool:
+    if _cache_enabled is not None:
+        return _cache_enabled
+    return Config.LLM_CACHE_ENABLED
+
+
+def _get_provider(name: str = None) -> Any:
+    provider = name or Config.LLM_PROVIDER
     if provider not in _providers:
         if provider == "gemini":
             _providers[provider] = GeminiProvider()
@@ -261,6 +311,21 @@ def _get_provider() -> Any:
         else:
             raise LLMError(f"Unknown LLM_PROVIDER '{provider}'. Choose from: gemini, groq, openrouter.")
     return _providers[provider]
+
+
+def _provider_chain(provider: Optional[str] = None, fallback: bool = True) -> List[str]:
+    """Ordered list of providers to try for a call.
+
+    Starts at `provider` (or Config.LLM_PROVIDER), then follows the canonical provider
+    order limited to providers that have an API key configured. Cross-provider fallback
+    is disabled when `fallback=False` (used by the multi-judge panel so each verdict is
+    independent).
+    """
+    start = provider or Config.LLM_PROVIDER
+    chain = [start]
+    if fallback:
+        chain.extend(p for p in Config.configured_providers() if p != start)
+    return chain
 
 
 def complete(
@@ -272,6 +337,9 @@ def complete(
     json_mode: bool = False,
     response_schema: Any = None,
     max_tool_calls: int = 5,
+    provider: Optional[str] = None,
+    fallback: bool = True,
+    use_cache: Optional[bool] = None,
 ) -> str:
     """Sends a chat request through the configured LLM provider (gemini | groq | openrouter).
 
@@ -279,14 +347,44 @@ def complete(
     - `tools`: OpenAI-style tool definitions (`{"type": "function", "function": {...}}`).
     - `execute_tool`: if provided, tool calls are executed in a loop until the model replies.
     - `json_mode`: request a JSON-encoded response (`response_schema` enforced where the provider supports it).
+    - `provider`: override the starting provider (must be in PROVIDERS).
+    - `fallback`: if True (default), a persistent quota/429 error falls back to the next configured provider.
+    - `use_cache`: override the on-disk response cache (defaults to Config.LLM_CACHE_ENABLED / --no-cache).
     """
-    return _get_provider().complete(
-        model=model,
-        messages=messages,
-        system=system,
-        tools=tools,
-        execute_tool=execute_tool,
-        json_mode=json_mode,
-        response_schema=response_schema,
-        max_tool_calls=max_tool_calls,
+    cache_enabled = use_cache if use_cache is not None else _cache_is_enabled()
+    cache = ResponseCache() if cache_enabled else None
+    quota = QuotaTracker()
+    cacheable = cache_enabled and not tools
+
+    last_error: Optional[BaseException] = None
+    for pname in _provider_chain(provider, fallback):
+        if cacheable:
+            hit = cache.get(pname, model, system, messages, json_mode, response_schema)
+            if hit is not None:
+                logger.info(f"Cache hit for {pname}/{model}; skipping API call.")
+                return hit
+        try:
+            out = _get_provider(pname).complete(
+                model=model,
+                messages=messages,
+                system=system,
+                tools=tools,
+                execute_tool=execute_tool,
+                json_mode=json_mode,
+                response_schema=response_schema,
+                max_tool_calls=max_tool_calls,
+            )
+        except QuotaExceededError as e:
+            logger.warning(f"{pname}: quota exceeded ({e}); trying next provider.")
+            last_error = e
+            continue
+        if cacheable:
+            cache.set(pname, model, system, messages, out, json_mode, response_schema)
+        quota.increment(pname)
+        return out
+
+    if last_error is not None:
+        raise last_error
+    raise LLMError(
+        f"No LLM providers available (LLM_PROVIDER={Config.LLM_PROVIDER}, configured={Config.configured_providers()})."
     )
