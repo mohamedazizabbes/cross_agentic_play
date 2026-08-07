@@ -40,3 +40,7 @@ logs/
 
 # Local working notes (not committed)
 PLAN.md
+
+# Markdown (except README.md)
+*.md
+!README.md

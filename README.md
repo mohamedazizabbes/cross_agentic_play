@@ -97,6 +97,18 @@ GROQ_MODEL=llama-3.3-70b-versatile
 - **Judge output is schema-enforced.** Gemini returns the verdict via `response_schema`; invalid JSON triggers a re-ask loop (up to 2 attempts), then a tolerant text fallback.
 - **Resilience.** 429/5xx retries with backoff (`utils/gemini.py`); `web_search` returns a structured error object instead of raising once retries are exhausted.
 
+## Related work
+
+This project builds on a real research lineage, not just an intuition:
+
+- **AI Safety via Debate** (Irving, Christiano, Amodei — OpenAI, 2018): the foundational idea — two agents debate, a judge decides, and judging should be easier than directly answering a hard question. The conceptual root of the PRO/CON/Judge structure here.
+- **Improving Factuality and Reasoning in Language Models through Multiagent Debate** (Du et al., MIT — 2023): shows that LLMs debating each other over multiple rounds measurably reduces hallucinations and improves factual accuracy — the direct precedent for this project's fact-checking layer.
+- **Debating with more persuasive LLMs leads to more truthful answers** (Khan et al. — 2024): studies whether a judge can be misled by rhetoric over truth in an LLM debate — closely related to why this project scores a contradicted citation worse than no citation at all.
+- **Debate helps supervise unreliable experts** (Michael, Bowman, et al. — 2023): studies whether a judge without full information can still reach correct verdicts by watching a debate — relevant to the judge's fact-checking role here.
+- **ChatEval** (Chan et al., ICLR 2024): a multi-agent "referee team" for LLM evaluation; found that giving each judge a genuinely distinct role/persona (not identical prompts) was essential to performance — worth keeping in mind for this project's multi-judge panel.
+
+Known open problems in this research area worth being aware of: the *obfuscated arguments problem* (a dishonest debater can construct a flawed argument whose flaw is hard to find), and *conformity effects* (weaker models tend to abandon correct positions and just agree with the majority rather than being genuinely persuaded).
+
 ## Testing
 
 ```bash
