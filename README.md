@@ -2,6 +2,11 @@
 
 Two agents debate any proposition — PRO vs CON. A third agent independently fact-checks their claims with live web search, and a judge scores the round on four axes and names a winner. All in a single stateless Python pipeline. Works with **Gemini, Groq, or OpenRouter** (free keys supported). No agent framework, no orchestration server, no external services beyond the LLM API and DuckDuckGo.
 
+![License: MIT](https://img.shields.io/github/license/mohamedazizabbes/cross_agentic_play)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![Tests](https://github.com/mohamedazizabbes/cross_agentic_play/actions/workflows/tests.yml/badge.svg)
+![LLMs: Gemini | Groq | OpenRouter](https://img.shields.io/badge/LLMs-Gemini%20%7C%20Groq%20%7C%20OpenRouter-blueviolet)
+
 ![Demo](docs/demo.gif)
 
 ## Quick start
@@ -135,3 +140,11 @@ This project deliberately uses none of them.
 - **No agent-to-agent messaging.** Debaters never talk to each other; they both see the full transcript every turn. The judge only reads. This keeps every model call reproducible and makes the debate log a single source of truth.
 
 If you want dozens of autonomous agents negotiating over a message bus, this isn't the repo. If you want a readable, testable, ~150-line multi-agent debate you can fork in an afternoon, it is.
+
+## Why not just use Claude/Gemini?
+
+The debaters, fact-checker, and judge are all LLM calls — so the honest question is what this repo adds over a single chat prompt. Three things:
+
+- **Reasoning pressure.** An agent that must defend a position and respond to rebuttals produces sharper, more self-critical arguments than one unopposed generation — the multiagent-debate-improves-factuality effect cited in [Related work](#related-work).
+- **Independent verification.** A separate agent with live web search checks claims after they're made, and the judge scores a contradicted citation *worse* than no citation at all. A single model grading its own output can't do that without a second model.
+- **A reproducible transcript.** Every round, claim, source, and score lands in a structured JSON log. You keep the reasoning and evidence, not just the final answer.
