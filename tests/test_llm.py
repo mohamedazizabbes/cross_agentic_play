@@ -26,6 +26,7 @@ def test_gemini_provider_tool_loop(monkeypatch):
 
     responses = [resp_tool, resp_text]
     monkeypatch.setattr(llm, "send_with_retry", lambda sender, label="request", max_retries=3: responses.pop(0))
+    monkeypatch.setattr(llm, "get_gemini_client", lambda: object())
 
     provider = llm.GeminiProvider()
     provider.client = object()  # not used; send_with_retry is stubbed
@@ -40,6 +41,7 @@ def test_gemini_provider_tool_loop(monkeypatch):
 
 def test_gemini_provider_skips_history_tool_messages(monkeypatch):
     monkeypatch.setattr(llm, "send_with_retry", lambda sender, label="request", max_retries=3: None)
+    monkeypatch.setattr(llm, "get_gemini_client", lambda: object())
     provider = llm.GeminiProvider()
 
     content = provider._to_content({"role": "user", "content": "hello"})

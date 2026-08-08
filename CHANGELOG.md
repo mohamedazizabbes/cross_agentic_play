@@ -21,4 +21,4 @@ All notable changes to AI Debate Arena are documented here.
 - `JudgeAgent.evaluate_debate()` accepts an optional `multi_judge` override.
 
 ### Fixed
-- None.
+- **CI unit suite passes offline**: `tests/test_llm.py` stubs the Gemini client, so `GeminiProvider` no longer requires a `GOOGLE_API_KEY` in test environments. The `Tests` GitHub Actions workflow (which had been red since the LLM provider abstraction landed) is green again.
