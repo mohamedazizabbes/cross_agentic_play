@@ -41,6 +41,9 @@ logs/
 # Local working notes (not committed)
 PLAN.md
 
-# Markdown (except README.md)
+# Markdown (except project docs that are meant to be tracked)
 *.md
 !README.md
+!SECURITY.md
+!CHANGELOG.md
+!CONTRIBUTING.md
