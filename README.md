@@ -127,7 +127,7 @@ pytest -m integration     # live end-to-end debate (calls Gemini + DuckDuckGo)
 
 - [ ] ELO ratings across debates to compare models/personas over time
 - [ ] Blind judging (judge doesn't know which debater = which model)
-- [ ] Multi-judge panel with score aggregation
+- [x] Multi-judge panel with score aggregation
 - [ ] Live co-judge mode for real competitive debate rounds — transcribes a live round, fact-checks claims in real time, drafts a ballot for a human judge to review and submit (never auto-decides)
 
 ## Why not LangGraph / AutoGen / CrewAI / MCP / RAG?
