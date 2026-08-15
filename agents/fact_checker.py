@@ -20,10 +20,14 @@ class FactChecker:
         self.model_name = model_name or Config.llm_model()
 
     def verify_turns(self, turns: List[DebateTurn]) -> None:
-        """Verifies every factual claim that carries a source, annotating the Claim in place."""
+        """Verifies every factual claim that carries a source, annotating the Claim in place.
+
+        Already-checked claims (verified is not None) are skipped, so real-time
+        per-turn checks and a later batch pass can both run without double work.
+        """
         for turn in turns:
             for claim in turn.claims:
-                if claim.is_factual and claim.sources:
+                if claim.is_factual and claim.sources and claim.verified is None:
                     self._verify_claim(claim)
 
     def _verify_claim(self, claim: Claim) -> None:

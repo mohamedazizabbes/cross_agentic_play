@@ -21,9 +21,12 @@ cp .env.example .env          # then add GOOGLE_API_KEY
 ```bash
 python main.py "Universal Basic Income should be implemented globally"
 python main.py "Coffee is the second most traded commodity after oil" --rounds 1
+python main.py "Nuclear energy is the cleanest scalable power source" --co-judge   # human judge reviews the verdict
 ```
 
 The CLI prints the full phase-by-phase transcript (speaker, phase, prose, structured claims), the judge's reasoning, flagged fallacies, per-axis scores, and the winner. A structured JSON log of the entire debate is saved to `logs/debate_<timestamp>.json`.
+
+**Live co-judge mode** (`--co-judge`) fact-checks each claim in real time as the round runs, then has the LLM draft a verdict ballot for a **human judge to review and submit** — you can approve it as-is, edit individual scores, override the winner, rewrite the reasoning, or ask for a redraft. The AI never decides on its own; the final verdict is always the one a human submits, and the log/export is tagged `reviewed_by_human`.
 
 ## How a debate flows
 
@@ -52,6 +55,7 @@ agents/
   debater.py       DebaterAgent — Gemini chat session per debater + manual web_search tool loop
   fact_checker.py  FactChecker — verifies sourced factual claims before judging
   judge.py         JudgeAgent — structured-output verdict (Pydantic response_schema) + re-ask loop
+  cojudge.py       CoJudge — live fact-checking + draft ballot for a human judge to review and submit
   prompts.py       System prompts: debater search policy, claim format, judge rubric
 tools/
   web_search.py    web_search() (DuckDuckGo, retry + no-fabrication policy) + Gemini FunctionDeclaration
@@ -128,7 +132,7 @@ pytest -m integration     # live end-to-end debate (calls Gemini + DuckDuckGo)
 - [ ] ELO ratings across debates to compare models/personas over time
 - [ ] Blind judging (judge doesn't know which debater = which model)
 - [x] Multi-judge panel with score aggregation
-- [ ] Live co-judge mode for real competitive debate rounds — transcribes a live round, fact-checks claims in real time, drafts a ballot for a human judge to review and submit (never auto-decides)
+- [x] Live co-judge mode for real competitive debate rounds — fact-checks claims in real time, drafts a ballot for a human judge to review and submit (never auto-decides)
 
 ## Why not LangGraph / AutoGen / CrewAI / MCP / RAG?
 

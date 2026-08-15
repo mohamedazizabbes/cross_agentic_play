@@ -5,6 +5,7 @@ All notable changes to AI Debate Arena are documented here.
 ## [Unreleased]
 
 ### Added
+- **Live co-judge mode**: `--co-judge` fact-checks each claim in real time as the round runs, then has the LLM draft a verdict ballot for a **human judge to review and submit** (approve as-is, edit a score, override the winner, rewrite reasoning, or request a redraft). The AI never decides on its own — cancelling aborts the run with no verdict. Submitted verdicts are tagged `reviewed_by_human` in the JSON log and exports.
 - **Provider fallback**: `utils/llm.py` now retries a quota/429-exhausted call on the next configured provider (Gemini → Groq → OpenRouter, limited to providers with keys set) instead of crashing. New `QuotaExceededError` drives the chain.
 - **Exponential retry with backoff** for transient 429 / 5xx errors from any provider (2–3 attempts, `retry_delay * 2^n`).
 - **Local quota tracking**: per-provider/per-day call counts in a flat JSON file (`.quota_state.json`), with a summary line printed before each run (e.g. `Gemini: 14/20 used today`). Limit configurable via `QUOTA_DAILY_LIMIT`.

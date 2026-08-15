@@ -126,6 +126,7 @@ class DebateLog:
     model_used: str
     turns: List[DebateTurn]
     verdict: JudgeVerdict
+    reviewed_by_human: bool = False  # True when a human judge approved/submitted the verdict
 
     def to_dict(self) -> dict:
         return {
@@ -134,6 +135,7 @@ class DebateLog:
             "model_used": self.model_used,
             "turns": [asdict(t) for t in self.turns],
             "verdict": self.verdict.to_dict(),
+            "reviewed_by_human": self.reviewed_by_human,
         }
 
 

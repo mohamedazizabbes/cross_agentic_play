@@ -6,6 +6,7 @@ from models import DebateTurn, DebateLog, assign_claim_ids, format_transcript
 from agents.debater import DebaterAgent
 from agents.judge import JudgeAgent
 from agents.fact_checker import FactChecker
+from agents.cojudge import CoJudge
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +19,14 @@ class DebateOrchestrator:
         model_name: str = None,
         human_side: str = None,
         multi_judge: bool = False,
+        co_judge: bool = False,
     ):
         self.topic = topic
         self.rebuttal_rounds = rebuttal_rounds if rebuttal_rounds is not None else Config.DEFAULT_REBUTTAL_ROUNDS
         self.model_name = model_name or Config.llm_model()
         self.human_side = (human_side or "").upper()
         self.multi_judge = multi_judge
+        self.co_judge = co_judge
 
         self.debater_a = DebaterAgent(
             name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name, human=self.human_side == "PRO"
@@ -33,6 +36,7 @@ class DebateOrchestrator:
         )
         self.judge = JudgeAgent(model_name=self.model_name, multi_judge=self.multi_judge)
         self.fact_checker = FactChecker(model_name=self.model_name)
+        self.co_judge_agent = CoJudge(model_name=self.model_name, multi_judge=self.multi_judge) if co_judge else None
 
         self.turns: List[DebateTurn] = []
 
@@ -42,6 +46,8 @@ class DebateOrchestrator:
     def _append_turn(self, turn: DebateTurn) -> None:
         self.turns.append(turn)
         assign_claim_ids(self.turns)
+        if self.co_judge_agent is not None:
+            self.co_judge_agent.fact_check_turn(turn)
 
     def run_debate(self) -> DebateLog:
         """
@@ -117,13 +123,23 @@ class DebateOrchestrator:
         turn_b_close = self.debater_b.generate_turn(phase="CLOSING", prompt_text=prompt_b_close)
         self._append_turn(turn_b_close)
 
-        # Phase 4: Fact-Checking (verifies all sourced factual claims before judging)
-        logger.info("--- Phase: Fact-Checking ---")
-        self.fact_checker.verify_turns(self.turns)
+        # Phase 4: Fact-Checking (verifies all sourced factual claims before judging).
+        # In co-judge mode each turn was already fact-checked live as it landed.
+        if not self.co_judge:
+            logger.info("--- Phase: Fact-Checking ---")
+            self.fact_checker.verify_turns(self.turns)
 
         # Phase 5: Judging
-        logger.info("--- Phase: Judging ---")
-        verdict = self.judge.evaluate_debate(topic=self.topic, turns=self.turns)
+        if self.co_judge_agent is not None:
+            logger.info("--- Phase: Co-Judge Ballot & Human Review ---")
+            verdict = self.co_judge_agent.run(topic=self.topic, turns=self.turns)
+            if verdict is None:
+                raise RuntimeError("Co-judge review cancelled by the human judge; no verdict was reached.")
+            reviewed_by_human = True
+        else:
+            logger.info("--- Phase: Judging ---")
+            verdict = self.judge.evaluate_debate(topic=self.topic, turns=self.turns)
+            reviewed_by_human = False
 
         debate_log = DebateLog(
             topic=self.topic,
@@ -131,6 +147,7 @@ class DebateOrchestrator:
             model_used=self.model_name,
             turns=self.turns,
             verdict=verdict,
+            reviewed_by_human=reviewed_by_human,
         )
 
         logger.info("=== DEBATE COMPLETE ===")

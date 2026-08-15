@@ -25,6 +25,12 @@ def main():
         "--multi-judge", action="store_true", help="Query all configured LLM providers for a verdict and aggregate them"
     )
     parser.add_argument(
+        "--co-judge",
+        action="store_true",
+        help="Live co-judge mode: fact-check each claim in real time, draft a ballot for a "
+        "human judge to review and submit (the AI never decides on its own)",
+    )
+    parser.add_argument(
         "--human",
         choices=["PRO", "CON"],
         default=None,
@@ -46,6 +52,7 @@ def main():
         rebuttal_rounds=args.rounds,
         human_side=args.human,
         multi_judge=args.multi_judge,
+        co_judge=args.co_judge,
     )
     debate_log = orchestrator.run_debate()
 
@@ -67,7 +74,8 @@ def main():
 
     v = debate_log.verdict
     print("\n" + "=" * 80)
-    print(" JUDGE VERDICT & SCORECARD")
+    print(" JUDGE VERDICT & SCORECARD"
+          + (" (REVIEWED & SUBMITTED BY A HUMAN JUDGE)" if debate_log.reviewed_by_human else ""))
     print("=" * 80)
     print(f"\nREASONING & FACT-CHECK ANALYSIS:\n{v.reasoning}")
     if v.unverified_or_contradicted_claims:

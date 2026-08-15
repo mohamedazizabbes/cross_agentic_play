@@ -55,6 +55,7 @@ def _debate_to_markdown(debate_log: DebateLog) -> str:
         "",
         f"- **Timestamp:** {debate_log.timestamp}",
         f"- **Model(s):** {debate_log.model_used}",
+        f"- **Verdict source:** {'Human judge (reviewed & submitted)' if debate_log.reviewed_by_human else 'AI judge'}",
         "",
         "---",
         "",
@@ -119,7 +120,9 @@ def _debate_to_html(debate_log: DebateLog) -> str:
         "td,th{border:1px solid #ccc;padding:0.4rem 0.8rem;text-align:center}",
         "</style></head><body>",
         f"<h1>Debate: {html.escape(debate_log.topic)}</h1>",
-        f'<p class="meta">Timestamp: {html.escape(debate_log.timestamp)}<br/>Model(s): {html.escape(debate_log.model_used)}</p>',
+        f'<p class="meta">Timestamp: {html.escape(debate_log.timestamp)}<br/>Model(s): {html.escape(debate_log.model_used)}<br/>'
+        f"Verdict source: "
+        f"{'Human judge (reviewed & submitted)' if debate_log.reviewed_by_human else 'AI judge'}</p>",
         "<hr/>",
     ]
     for i, turn in enumerate(debate_log.turns, 1):
