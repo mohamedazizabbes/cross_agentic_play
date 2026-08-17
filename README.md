@@ -50,6 +50,19 @@ A contradicted or unverifiable citation scores *worse* on the judge's evidence a
 
 *Editable source: [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd)*
 
+```mermaid
+flowchart TD
+    CLI[CLI] --> ORCH[DebateOrchestrator]
+    ORCH --> A[PRO]
+    ORCH --> B[CON]
+    ORCH --> FC[FactChecker]
+    ORCH --> J[JudgeAgent]
+    A -. web_search .-> DDG[DDG]
+    B -. web_search .-> DDG
+    FC -. verify .-> DDG
+    J --> SCHEMA[JudgeOutputSchema]
+```
+
 ```
 agents/
   debater.py       DebaterAgent — Gemini chat session per debater + manual web_search tool loop
