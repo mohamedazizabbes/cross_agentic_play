@@ -20,6 +20,11 @@ class DebateOrchestrator:
         human_side: str = None,
         multi_judge: bool = False,
         co_judge: bool = False,
+        debater_a=None,
+        debater_b=None,
+        judge=None,
+        fact_checker=None,
+        co_judge_agent=None,
     ):
         self.topic = topic
         self.rebuttal_rounds = rebuttal_rounds if rebuttal_rounds is not None else Config.DEFAULT_REBUTTAL_ROUNDS
@@ -28,15 +33,40 @@ class DebateOrchestrator:
         self.multi_judge = multi_judge
         self.co_judge = co_judge
 
-        self.debater_a = DebaterAgent(
-            name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name, human=self.human_side == "PRO"
+        self.debater_a = (
+            debater_a
+            if debater_a is not None
+            else DebaterAgent(
+                name="Debater A", stance="PRO", topic=self.topic, model_name=self.model_name, human=self.human_side == "PRO"
+            )
         )
-        self.debater_b = DebaterAgent(
-            name="Debater B", stance="CON", topic=self.topic, model_name=self.model_name, human=self.human_side == "CON"
+        self.debater_b = (
+            debater_b
+            if debater_b is not None
+            else DebaterAgent(
+                name="Debater B", stance="CON", topic=self.topic, model_name=self.model_name, human=self.human_side == "CON"
+            )
         )
-        self.judge = JudgeAgent(model_name=self.model_name, multi_judge=self.multi_judge)
-        self.fact_checker = FactChecker(model_name=self.model_name)
-        self.co_judge_agent = CoJudge(model_name=self.model_name, multi_judge=self.multi_judge) if co_judge else None
+        self.judge = (
+            judge
+            if judge is not None
+            else JudgeAgent(model_name=self.model_name, multi_judge=self.multi_judge)
+        )
+        self.fact_checker = (
+            fact_checker
+            if fact_checker is not None
+            else FactChecker(model_name=self.model_name)
+        )
+        if co_judge:
+            self.co_judge_agent = (
+                co_judge_agent
+                if co_judge_agent is not None
+                else CoJudge(
+                    model_name=self.model_name, multi_judge=self.multi_judge
+                )
+            )
+        else:
+            self.co_judge_agent = None
 
         self.turns: List[DebateTurn] = []
 

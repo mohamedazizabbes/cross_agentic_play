@@ -31,13 +31,17 @@ class DebaterAgent:
             return self._human_turn(phase, prompt_text)
 
         self.messages.append({"role": "user", "content": prompt_text})
-        raw_text = complete(
-            model=self.model_name,
-            messages=self.messages,
-            system=self.system_prompt,
-            tools=[WEB_SEARCH_TOOL],
-            execute_tool=web_search,
-        )
+        try:
+            raw_text = complete(
+                model=self.model_name,
+                messages=self.messages,
+                system=self.system_prompt,
+                tools=[WEB_SEARCH_TOOL],
+                execute_tool=web_search,
+            )
+        except Exception as e:
+            logger.error(f"[{self.name}] LLM call failed: {e}")
+            raw_text = ""
         self.messages.append({"role": "assistant", "content": raw_text})
 
         claims = parse_claims(raw_text)

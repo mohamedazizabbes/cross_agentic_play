@@ -118,7 +118,7 @@ class JudgeAgent:
             fallback=provider is None,
         )
 
-    def _parse_with_reask(self, prompt: str, text: str, max_reasks: int = 2) -> Optional[JudgeVerdict]:
+    def _parse_with_reask(self, prompt: str, text: str, max_reasks: int = 5) -> Optional[JudgeVerdict]:
         """Validates judge output against the schema, re-asking the model up to max_reasks times."""
         data = _extract_json_dict(text)
         for attempt in range(max_reasks + 1):

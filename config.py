@@ -58,8 +58,9 @@ class Config:
             "groq": "GROQ_API_KEY",
             "openrouter": "OPENROUTER_API_KEY",
         }.get(cls.LLM_PROVIDER)
-        if not getattr(cls, required_key):
+        api_key = getattr(cls, required_key, "")
+        if not api_key:
             raise ValueError(
                 f"{required_key} environment variable is required when LLM_PROVIDER={cls.LLM_PROVIDER}. "
-                "Please check your .env file."
+                "Please set it in your .env file."
             )
