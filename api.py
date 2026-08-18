@@ -30,11 +30,8 @@ def verify():
         claims = claim_extractor.extract_claims(text)
 
         for claim in claims:
-            if claim.is_factual and claim.sources:
+            if claim.is_factual:
                 fact_checker._verify_claim(claim)
-            elif claim.is_factual:
-                claim.verified = None
-                claim.verification_note = "NO_SOURCES: No sources cited to verify"
 
         result = {
             "claims": [
