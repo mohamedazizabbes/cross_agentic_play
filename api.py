@@ -4,7 +4,6 @@ from flask_cors import CORS
 from config import Config
 from agents.claim_extractor import ClaimExtractor
 from agents.fact_checker import FactChecker
-from models import Claim
 
 app = Flask(__name__)
 CORS(app)
