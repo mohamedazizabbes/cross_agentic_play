@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Fact-Check Selection",
+  "version": "1.0",
+  "description": "Check selected text for factual accuracy.",
+  "permissions": ["activeTab", "contextMenus"],
+  "host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Fact-Check"
+  }
+}
