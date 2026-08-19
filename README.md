@@ -28,61 +28,37 @@ The CLI prints the full phase-by-phase transcript (speaker, phase, prose, struct
 
 **Live co-judge mode** (`--co-judge`) fact-checks each claim in real time as the round runs, then has the LLM draft a verdict ballot for a **human judge to review and submit** — you can approve it as-is, edit individual scores, override the winner, rewrite the reasoning, or ask for a redraft. The AI never decides on its own; the final verdict is always the one a human submits, and the log/export is tagged `reviewed_by_human`.
 
-## How a debate flows
+## Running the fact-check API locally
 
-Every turn appends a structured claim block — one line per claim: `<id>|<FACTUAL|OPINION>|"<text>"|<sources>|<rebuts_id>` — so later turns and the judge reference specific claim IDs (e.g. `CON-1-2`) instead of free text.
-
-![Debate flow diagram](docs/diagrams/flow.svg)
-
-*Editable source: [`docs/diagrams/flow.mmd`](docs/diagrams/flow.mmd)*
-
-### Claim verification lifecycle
-
-![Claim lifecycle diagram](docs/diagrams/claim_lifecycle.svg)
-
-*Editable source: [`docs/diagrams/claim_lifecycle.mmd`](docs/diagrams/claim_lifecycle.mmd)*
-
-A contradicted or unverifiable citation scores *worse* on the judge's evidence axis than making no factual claim at all.
-
-## Architecture
-
-![Architecture diagram](docs/diagrams/architecture.svg)
-
-*Editable source: [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd)*
-
-```mermaid
-flowchart TD
-    CLI[CLI] --> ORCH[DebateOrchestrator]
-    ORCH --> A[PRO]
-    ORCH --> B[CON]
-    ORCH --> FC[FactChecker]
-    ORCH --> J[JudgeAgent]
-    A -. web_search .-> DDG[DDG]
-    B -. web_search .-> DDG
-    FC -. verify .-> DDG
-    J --> SCHEMA[JudgeOutputSchema]
+```bash
+python api.py
 ```
 
-```
-agents/
-  debater.py       DebaterAgent — Gemini chat session per debater + manual web_search tool loop
-  fact_checker.py  FactChecker — verifies sourced factual claims before judging
-  judge.py         JudgeAgent — structured-output verdict (Pydantic response_schema) + re-ask loop
-  cojudge.py       CoJudge — live fact-checking + draft ballot for a human judge to review and submit
-  prompts.py       System prompts: debater search policy, claim format, judge rubric
-tools/
-  web_search.py    web_search() (DuckDuckGo, retry + no-fabrication policy) + Gemini FunctionDeclaration
-utils/
-  gemini.py        Shared google-genai client, send_with_retry (429/5xx backoff), function-calling loop
-  logger.py        Logging setup + structured JSON log writer
-config.py          Env-driven config (API key, model, rounds, log dir)
-models.py          Claim / DebateTurn / DebateLog / JudgeVerdict dataclasses + Pydantic schema
-orchestrator.py    DebateOrchestrator — the turn-based pipeline state machine
-main.py            CLI entry point — runs the pipeline, prints summary, saves JSON log
-tests/             Unit tests + gated live integration test
-docs/
-  diagrams/        Mermaid sources (.mmd) + rendered SVGs used in this README
-```
+Runs on `http://localhost:5000`. Two endpoints:
+
+- **POST `/verify`** — send `{ "text": "..." }` and get back structured claims with verification results (verified / contradicted / unverified).
+- **GET `/health`** — liveness check, returns `{"status": "ok"}`.
+
+Requires the same `.env` setup as the CLI (set `GOOGLE_API_KEY`, or `GROQ_API_KEY`, or `OPENROUTER_API_KEY`).
+
+CORS is fully open (all origins allowed) — fine for a local-only development server. The browser extension calls this API directly from `chrome-extension://` origins.
+
+## Browser extension setup
+
+The extension lets you highlight text on any webpage and fact-check it with one click.
+
+1. **Start the API first** — the extension calls `localhost:5000` directly; nothing works without the API running.
+
+   ```bash
+   python api.py
+   ```
+
+2. Open `chrome://extensions` in Chrome.
+3. Enable **Developer mode** (toggle in the top right).
+4. Click **Load unpacked** and select the `extension/` folder from this repo.
+5. The extension icon appears in your toolbar. Highlight text on any page, right-click, and select **Fact-check this** — results appear in the popup.
+
+> **Note:** This is a local developer-mode extension, not published to the Chrome Web Store. It only works while `api.py` is running on your machine.
 
 ## Configuration
 
@@ -138,7 +114,7 @@ pytest                    # unit tests (live API tests deselected by default)
 pytest -m integration     # live end-to-end debate (calls Gemini + DuckDuckGo)
 ```
 
-`tests/test_pipeline_golden.py` runs the full orchestrator → fact-check → judge → log pipeline against real APIs and is gated behind the `integration` marker so unit runs stay fast and offline.
+`tests/test_pipeline_golden.py` runs the full orchestrator -> fact-check -> judge -> log pipeline against real APIs and is gated behind the `integration` marker so unit runs stay fast and offline.
 
 ## Roadmap
 
