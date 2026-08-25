@@ -1,6 +1,6 @@
 # AI Debate Arena
 
-Two agents debate any proposition — PRO vs CON. A third agent independently fact-checks their claims with live web search, and a judge scores the round on four axes and names a winner. Works with Gemini, Groq, or OpenRouter (free keys supported).
+Two agents debate any proposition — PRO vs CON. A third agent independently fact-checks their claims with live web search, and a judge scores the round on four axes and names a winner. Works with Gemini, OpenAI, Anthropic, Groq, or OpenRouter.
 
 The same fact-checking engine also runs standalone — as a local API, and as a browser extension that fact-checks any text you highlight on the web.
 
@@ -56,26 +56,25 @@ Local developer-mode extension only — requires `api.py` running on your machin
 
 ## Configuration
 
-The engine supports three LLM providers. Set `LLM_PROVIDER` in `.env` to choose one — only that provider's API key is required.
+Set `LLM_PROVIDER` in `.env` to choose a backend — only that provider's API key is required.
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `LLM_PROVIDER` | `gemini` | No | Backend to use: `gemini`, `groq`, or `openrouter`. |
-| `GOOGLE_API_KEY` | — | If using Gemini | Key from Google AI Studio. |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | No | Gemini model name. |
-| `GROQ_API_KEY` | — | If using Groq | Free key from console.groq.com. |
-| `GROQ_MODEL` | `qwen/qwen3.6-27b` | No | Groq model name. |
-| `OPENROUTER_API_KEY` | — | If using OpenRouter | Free key from openrouter.ai. |
-| `OPENROUTER_MODEL` | `deepseek/deepseek-chat-v3-0324:free` | No | OpenRouter model name; `:free` selects a no-cost tier. |
-| `DEFAULT_REBUTTAL_ROUNDS` | `2` | No | Rebuttal rounds per debate when `--rounds` isn't passed. |
-| `LOG_DIR` | `logs` | No | Directory where debate transcripts are written as JSON. |
+| `LLM_PROVIDER` | `gemini` | No | `gemini`, `openai`, `anthropic`, `groq`, or `openrouter`. |
+| `GOOGLE_API_KEY` | — | If Gemini | Key from Google AI Studio. |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | No | |
+| `OPENAI_API_KEY` | — | If OpenAI | Key from platform.openai.com. |
+| `OPENAI_MODEL` | `gpt-4o` | No | |
+| `ANTHROPIC_API_KEY` | — | If Anthropic | Key from console.anthropic.com. |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | No | |
+| `GROQ_API_KEY` | — | If Groq | Free key from console.groq.com. |
+| `GROQ_MODEL` | `qwen/qwen3.6-27b` | No | |
+| `OPENROUTER_API_KEY` | — | If OpenRouter | Free key from openrouter.ai. |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-chat-v3-0324:free` | No | `:free` = no-cost tier. |
+| `DEFAULT_REBUTTAL_ROUNDS` | `2` | No | |
+| `LOG_DIR` | `logs` | No | |
 
-Example configuration using Groq:
-```
-LLM_PROVIDER=groq
-GROQ_API_KEY=gsk_...
-GROQ_MODEL=qwen/qwen3.6-27b
-```
+Fastest option: use your own OpenAI or Anthropic API key directly.
 
 ## Testing
 

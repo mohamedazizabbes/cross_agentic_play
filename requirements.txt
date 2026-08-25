@@ -1,5 +1,6 @@
 google-genai==2.16.0
 openai==1.59.3
+anthropic==0.42.0
 duckduckgo-search==8.1.1
 pydantic==2.13.4
 python-dotenv==1.0.1

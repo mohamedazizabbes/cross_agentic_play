@@ -3,11 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PROVIDERS = ("gemini", "groq", "openrouter")
+PROVIDERS = ("gemini", "openai", "anthropic", "groq", "openrouter")
 
 # Maps provider name -> Config attribute holding its API key.
 PROVIDER_API_KEYS = {
     "gemini": "GOOGLE_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
     "groq": "GROQ_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
 }
@@ -17,6 +19,10 @@ class Config:
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -36,6 +42,8 @@ class Config:
     def model_for(cls, provider):
         return {
             "gemini": cls.GEMINI_MODEL,
+            "openai": cls.OPENAI_MODEL,
+            "anthropic": cls.ANTHROPIC_MODEL,
             "groq": cls.GROQ_MODEL,
             "openrouter": cls.OPENROUTER_MODEL,
         }.get(provider, cls.GEMINI_MODEL)
@@ -55,6 +63,8 @@ class Config:
             raise ValueError(f"LLM_PROVIDER must be one of {PROVIDERS}, got '{cls.LLM_PROVIDER}'.")
         required_key = {
             "gemini": "GOOGLE_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
             "groq": "GROQ_API_KEY",
             "openrouter": "OPENROUTER_API_KEY",
         }.get(cls.LLM_PROVIDER)

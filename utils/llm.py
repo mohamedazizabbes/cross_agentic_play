@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional
 from openai import OpenAI, APIError as OpenAIAPIError
 from google.genai import types as genai_types
 from google.genai import errors as genai_errors
+import anthropic
 
 from config import Config
 from utils.cache import ResponseCache
@@ -285,6 +286,185 @@ class OpenAICompatProvider:
         return (response.choices[0].message.content or "").strip()
 
 
+class OpenAIProvider:
+    def __init__(self):
+        api_key = Config.OPENAI_API_KEY
+        if not api_key:
+            raise LLMError("OpenAI API key not set. Set OPENAI_API_KEY in your .env file.")
+        self.client = OpenAI(api_key=api_key)
+
+    @staticmethod
+    def _dump_tool_call(tc) -> dict:
+        return {
+            "id": tc.id,
+            "type": "function",
+            "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"},
+        }
+
+    def _create(self, model: str, messages: List[dict], kwargs: Dict[str, Any], label: str = "chat"):
+        return send_with_retry(
+            lambda: self.client.chat.completions.create(model=model, messages=messages, **kwargs),
+            label=label,
+        )
+
+    def complete(
+        self,
+        model: str,
+        messages: List[dict],
+        system: Optional[str] = None,
+        tools: Optional[List[dict]] = None,
+        execute_tool: Optional[Callable] = None,
+        json_mode: bool = False,
+        response_schema: Any = None,
+        max_tool_calls: int = 5,
+    ) -> str:
+        msgs: List[dict] = []
+        if system:
+            msgs.append({"role": "system", "content": system})
+        msgs.extend(messages)
+
+        kwargs: Dict[str, Any] = {}
+        if tools:
+            kwargs["tools"] = tools
+        if json_mode:
+            schema = (
+                response_schema.model_json_schema()
+                if hasattr(response_schema, "model_json_schema")
+                else response_schema
+            )
+            if schema:
+                kwargs["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": "verdict", "schema": schema},
+                }
+            else:
+                kwargs["response_format"] = {"type": "json_object"}
+
+        try:
+            response = self._create(model, msgs, kwargs)
+        except OpenAIAPIError as e:
+            if tools and _status_code(e) == 400:
+                logger.warning(f"openai: model '{model}' rejected function calling; falling back to no tools.")
+                kwargs.pop("tools", None)
+                response = self._create(model, msgs, kwargs)
+            elif json_mode and _status_code(e) == 400:
+                logger.warning(f"openai: model '{model}' rejected json_schema; falling back to json_object.")
+                kwargs["response_format"] = {"type": "json_object"}
+                response = self._create(model, msgs, kwargs)
+            else:
+                raise
+
+        for _ in range(max_tool_calls):
+            msg = response.choices[0].message
+            if msg.tool_calls and execute_tool:
+                msgs.append({
+                    "role": "assistant",
+                    "content": msg.content or "",
+                    "tool_calls": [self._dump_tool_call(tc) for tc in msg.tool_calls],
+                })
+                for tc in msg.tool_calls:
+                    args = json.loads(tc.function.arguments or "{}")
+                    logger.info(f"Executing tool call: {tc.function.name}({args})")
+                    result = execute_tool(**args)
+                    msgs.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps({"result": result})})
+                response = self._create(model, msgs, kwargs, label="chat (tool results)")
+            else:
+                return (msg.content or "").strip()
+
+        return (response.choices[0].message.content or "").strip()
+
+
+class AnthropicProvider:
+    def __init__(self):
+        api_key = Config.ANTHROPIC_API_KEY
+        if not api_key:
+            raise LLMError("Anthropic API key not set. Set ANTHROPIC_API_KEY in your .env file.")
+        self.client = anthropic.Anthropic(api_key=api_key)
+
+    def complete(
+        self,
+        model: str,
+        messages: List[dict],
+        system: Optional[str] = None,
+        tools: Optional[List[dict]] = None,
+        execute_tool: Optional[Callable] = None,
+        json_mode: bool = False,
+        response_schema: Any = None,
+        max_tool_calls: int = 5,
+    ) -> str:
+        kwargs: Dict[str, Any] = {"model": model, "max_tokens": 4096}
+        if system:
+            kwargs["system"] = system
+
+        anthropic_msgs = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content") or ""
+            if role in ("user", "assistant"):
+                anthropic_msgs.append({"role": role, "content": content})
+
+        if not anthropic_msgs:
+            anthropic_msgs.append({"role": "user", "content": "hello"})
+
+        kwargs["messages"] = anthropic_msgs
+
+        if tools:
+            kwargs["tools"] = [
+                {
+                    "name": t.get("function", {}).get("name", t.get("name", "")),
+                    "description": t.get("function", {}).get("description", t.get("description", "")),
+                    "input_schema": t.get("function", {}).get("parameters", t.get("parameters", {})),
+                }
+                for t in tools
+            ]
+
+        if json_mode:
+            if system:
+                kwargs["system"] = system + "\nRespond with valid JSON only."
+            else:
+                kwargs["system"] = "Respond with valid JSON only."
+
+        def do_call():
+            return self.client.messages.create(**kwargs)
+
+        response = send_with_retry(do_call, label="chat")
+
+        text = ""
+        tool_calls = []
+        for block in response.content:
+            if block.type == "text":
+                text += block.text
+            elif block.type == "tool_use":
+                tool_calls.append(block)
+
+        for _ in range(max_tool_calls):
+            if tool_calls and execute_tool:
+                anthropic_msgs.append({"role": "assistant", "content": response.content})
+                tool_results = []
+                for tc in tool_calls:
+                    logger.info(f"Executing tool call: {tc.name}({tc.input})")
+                    result = execute_tool(**tc.input)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": json.dumps({"result": result}),
+                    })
+                anthropic_msgs.append({"role": "user", "content": tool_results})
+                kwargs["messages"] = anthropic_msgs
+                response = send_with_retry(do_call, label="chat (tool results)")
+                text = ""
+                tool_calls = []
+                for block in response.content:
+                    if block.type == "text":
+                        text += block.text
+                    elif block.type == "tool_use":
+                        tool_calls.append(block)
+            else:
+                return text.strip()
+
+        return text.strip()
+
+
 _providers: Dict[str, Any] = {}
 _cache_enabled: Optional[bool] = None
 
@@ -306,10 +486,14 @@ def _get_provider(name: str = None) -> Any:
     if provider not in _providers:
         if provider == "gemini":
             _providers[provider] = GeminiProvider()
+        elif provider == "openai":
+            _providers[provider] = OpenAIProvider()
+        elif provider == "anthropic":
+            _providers[provider] = AnthropicProvider()
         elif provider in ("groq", "openrouter"):
             _providers[provider] = OpenAICompatProvider(provider)
         else:
-            raise LLMError(f"Unknown LLM_PROVIDER '{provider}'. Choose from: gemini, groq, openrouter.")
+            raise LLMError(f"Unknown LLM_PROVIDER '{provider}'. Choose from: gemini, openai, anthropic, groq, openrouter.")
     return _providers[provider]
 
 
