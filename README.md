@@ -64,7 +64,7 @@ The engine supports three LLM providers. Set `LLM_PROVIDER` in `.env` to choose 
 | `GOOGLE_API_KEY` | — | If using Gemini | Key from Google AI Studio. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | No | Gemini model name. |
 | `GROQ_API_KEY` | — | If using Groq | Free key from console.groq.com. |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | No | Groq model name. |
+| `GROQ_MODEL` | `qwen/qwen3.6-27b` | No | Groq model name. |
 | `OPENROUTER_API_KEY` | — | If using OpenRouter | Free key from openrouter.ai. |
 | `OPENROUTER_MODEL` | `deepseek/deepseek-chat-v3-0324:free` | No | OpenRouter model name; `:free` selects a no-cost tier. |
 | `DEFAULT_REBUTTAL_ROUNDS` | `2` | No | Rebuttal rounds per debate when `--rounds` isn't passed. |
@@ -74,7 +74,7 @@ Example configuration using Groq:
 ```
 LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_...
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=qwen/qwen3.6-27b
 ```
 
 ## Testing

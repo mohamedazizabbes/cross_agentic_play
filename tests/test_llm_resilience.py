@@ -76,6 +76,7 @@ def test_send_with_retry_propagates_non_retryable(monkeypatch):
 
 
 def test_provider_chain_order_and_fallback(monkeypatch):
+    monkeypatch.setattr("config.Config.LLM_PROVIDER", "gemini")
     monkeypatch.setattr("config.Config.GOOGLE_API_KEY", "k")
     monkeypatch.setattr("config.Config.GROQ_API_KEY", "g")
     monkeypatch.setattr("config.Config.OPENROUTER_API_KEY", "")
